@@ -26,9 +26,15 @@ Thumbs.db
 # Models (large files)
 models/*.pt
 
+# Dataset (images)
+dataset/
+
 # Database
 *.db
 
 # Temp files
 *.tmp
 /tmp/
+
+# Package lock
+frontend/package-lock.json
