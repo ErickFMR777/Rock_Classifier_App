@@ -59,12 +59,42 @@ class RockClassifier:
         )
 
     def _initialize_model(self) -> nn.Module:
-        """Initialize ResNet50 architecture with custom output classes."""
+        """Initialize model architecture matching the trained checkpoint."""
         num_classes = len(self.classes)
-        model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
-        num_ftrs = model.fc.in_features
-        model.fc = nn.Linear(num_ftrs, num_classes)
-        logger.info(f"Initialized ResNet50 with {num_classes} output classes")
+
+        # Try to detect architecture from checkpoint
+        architecture = 'resnet18'
+        if self.model_path.exists():
+            try:
+                checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)
+                if isinstance(checkpoint, dict):
+                    architecture = checkpoint.get('architecture', 'resnet18')
+            except Exception:
+                pass
+
+        if 'resnet50' in architecture:
+            model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Sequential(
+                nn.Dropout(0.3),
+                nn.Linear(num_ftrs, 512),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.2),
+                nn.Linear(512, num_classes)
+            )
+        else:
+            model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Sequential(
+                nn.Dropout(0.4),
+                nn.Linear(num_ftrs, 256),
+                nn.BatchNorm1d(256),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.2),
+                nn.Linear(256, num_classes)
+            )
+
+        logger.info(f"Initialized {architecture} with {num_classes} output classes")
         return model
 
     def _load_weights(self):
