@@ -30,9 +30,9 @@ MODEL_SAVE_PATH = MODEL_DIR / "rock_classifier.pt"
 
 # Training hyperparameters (optimized for CPU)
 BATCH_SIZE = 16
-NUM_EPOCHS = 15
-LEARNING_RATE = 0.001
-FC_LEARNING_RATE = 0.01
+NUM_EPOCHS = 8
+LEARNING_RATE = 1e-4
+FC_LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-4
 IMAGE_SIZE = 224
 VAL_SPLIT = 0.2
@@ -74,6 +74,10 @@ def create_model(num_classes: int) -> nn.Module:
 
     # Unfreeze layer4 (last residual block) for fine-tuning
     for param in model.layer4.parameters():
+        param.requires_grad = True
+
+    # Also unfreeze layer3 to improve representational power for fine-tuning
+    for param in model.layer3.parameters():
         param.requires_grad = True
 
     # Replace classifier with a better head
@@ -226,16 +230,30 @@ def main():
         logger.info(f"Updated rock_classes.json with {len(class_names)} classes")
 
     # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
+    # Compute class weights to address imbalance
+    from collections import Counter
+    counts = Counter([full_dataset.samples[i][1] for i in range(len(full_dataset))])
+    class_counts = [counts.get(i, 0) for i in range(num_classes)]
+    total = float(sum(class_counts)) if sum(class_counts) > 0 else 1.0
+    class_weights = [total / (c + 1e-6) for c in class_counts]
+    weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weights_tensor)
 
     # Different learning rates: higher for FC, lower for fine-tuned layers
     fc_params = list(model.fc.parameters())
-    backbone_params = [p for p in model.layer4.parameters() if p.requires_grad]
+    backbone_params = [p for p in model.layer4.parameters() if p.requires_grad] + [p for p in model.layer3.parameters() if p.requires_grad]
 
-    optimizer = optim.Adam([
-        {'params': backbone_params, 'lr': LEARNING_RATE},
-        {'params': fc_params, 'lr': FC_LEARNING_RATE},
-    ], weight_decay=WEIGHT_DECAY)
+    # Try AdamW for better generalization, fall back to Adam if not available
+    try:
+        optimizer = optim.AdamW([
+            {'params': backbone_params, 'lr': LEARNING_RATE},
+            {'params': fc_params, 'lr': FC_LEARNING_RATE},
+        ], weight_decay=WEIGHT_DECAY)
+    except Exception:
+        optimizer = optim.Adam([
+            {'params': backbone_params, 'lr': LEARNING_RATE},
+            {'params': fc_params, 'lr': FC_LEARNING_RATE},
+        ], weight_decay=WEIGHT_DECAY)
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5,
                                                        patience=3, verbose=True)
@@ -309,6 +327,20 @@ def main():
         val_loss, val_acc, all_preds, all_labels = validate(model, val_loader, criterion, device)
         report = classification_report(all_labels, all_preds, target_names=class_names, zero_division=0)
         logger.info(f"\nClassification Report:\n{report}")
+
+        # Save metrics to JSON for API consumption
+        import json
+        metrics = {
+            'best_val_acc': best_val_acc,
+            'val_loss': val_loss,
+            'val_acc': val_acc,
+            'num_classes': num_classes,
+            'classification_report': report,
+        }
+        metrics_path = MODEL_DIR / 'metrics.json'
+        with open(metrics_path, 'w') as mf:
+            json.dump(metrics, mf, indent=2)
+        logger.info(f"Metrics saved to {metrics_path}")
     else:
         logger.error("No model was saved (training may have failed)")
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 const fadeUp = {
@@ -97,20 +97,48 @@ interface AboutPageProps {
 export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
   const [metricSort, setMetricSort] = useState<'name' | 'f1' | 'recall'>('f1');
   const [metricFilter, setMetricFilter] = useState<'all' | 'igneous' | 'sedimentary' | 'metamorphic'>('all');
+  const [remoteMetrics, setRemoteMetrics] = useState<any | null>(null);
 
-  const sorted = [...classMetrics]
-    .filter(m => metricFilter === 'all' || m.category === metricFilter)
+  // If remote metrics are available, prefer them (falls back to bundled `classMetrics`).
+  const existingMap = Object.fromEntries(classMetrics.map((m) => [m.name, m]));
+  let displayedClassMetrics = classMetrics;
+  if (remoteMetrics && remoteMetrics.classification_report && typeof remoteMetrics.classification_report === 'object') {
+    displayedClassMetrics = Object.entries(remoteMetrics.classification_report).map(([name, stats]) => {
+      const ex = existingMap[name];
+      const precision = parseFloat((stats as any).precision || (stats as any)[0] || 0) || 0;
+      const recall = parseFloat((stats as any).recall || (stats as any)[1] || 0) || 0;
+      const f1 = parseFloat((stats as any).f1 || (stats as any)[2] || 0) || 0;
+      const support = parseInt(String((stats as any).support || (stats as any)[3] || 0), 10) || 0;
+      return { name, precision, recall, f1, support, category: ex ? ex.category : 'igneous' };
+    });
+  }
+
+  const sorted = [...displayedClassMetrics]
+    .filter((m) => metricFilter === 'all' || m.category === metricFilter)
     .sort((a, b) => {
       if (metricSort === 'name') return a.name.localeCompare(b.name);
       if (metricSort === 'f1') return b.f1 - a.f1;
       return b.recall - a.recall;
     });
 
-  const avgPrecision = classMetrics.reduce((s, m) => s + m.precision, 0) / classMetrics.length;
-  const avgRecall = classMetrics.reduce((s, m) => s + m.recall, 0) / classMetrics.length;
-  const avgF1 = classMetrics.reduce((s, m) => s + m.f1, 0) / classMetrics.length;
-  const totalSupport = classMetrics.reduce((s, m) => s + m.support, 0);
-  const weightedAcc = classMetrics.reduce((s, m) => s + m.recall * m.support, 0) / totalSupport;
+  const avgPrecision = displayedClassMetrics.reduce((s, m) => s + m.precision, 0) / displayedClassMetrics.length;
+  const avgRecall = displayedClassMetrics.reduce((s, m) => s + m.recall, 0) / displayedClassMetrics.length;
+  const avgF1 = displayedClassMetrics.reduce((s, m) => s + m.f1, 0) / displayedClassMetrics.length;
+  const totalSupport = displayedClassMetrics.reduce((s, m) => s + m.support, 0);
+  const weightedAcc = totalSupport > 0
+    ? displayedClassMetrics.reduce((s, m) => s + m.recall * m.support, 0) / totalSupport
+    : avgRecall;
+
+  // Fetch remote metrics.json on mount (non-blocking). Fallback kept if unavailable.
+  useEffect(() => {
+    fetch('/api/model/metrics')
+      .then((res) => {
+        if (!res.ok) throw new Error('no-metrics');
+        return res.json();
+      })
+      .then((data) => setRemoteMetrics(data))
+      .catch(() => undefined);
+  }, []);
 
   return (
     <div className="space-y-12">

@@ -43,8 +43,8 @@ SEARCH_QUERIES = {
     "Porphyry": ["porphyry rock sample", "porphyry stone specimen", "porphyry geology"],
 }
 
-IMAGES_PER_QUERY = 30
-MAX_IMAGES_PER_CLASS = 80
+IMAGES_PER_QUERY = 10
+MAX_IMAGES_PER_CLASS = 30
 DATASET_DIR = Path(__file__).parent.parent.parent / "dataset"
 
 

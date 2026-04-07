@@ -8,7 +8,8 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
-from .config import ALLOWED_ORIGINS, API_HOST, API_PORT, API_RELOAD, LOG_LEVEL
+from .config import ALLOWED_ORIGINS, API_HOST, API_PORT, API_RELOAD, LOG_LEVEL, MODELS_DIR
+import json
 from .utils.model_loader import load_rock_model
 from .routers import classify, reference
 
@@ -57,6 +58,21 @@ app.include_router(reference.router, prefix="/api/reference", tags=["Reference D
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "service": "rock-classifier-api", "version": "1.0.0"}
+
+
+@app.get("/api/model/metrics")
+async def get_model_metrics():
+    """Return model training metrics saved as JSON in the models directory."""
+    metrics_path = MODELS_DIR / "metrics.json"
+    if not metrics_path.exists():
+        return JSONResponse(status_code=404, content={"detail": "metrics.json not found"})
+    try:
+        with open(metrics_path, "r") as fh:
+            data = json.load(fh)
+        return data
+    except Exception as e:
+        logger.error(f"Failed to read metrics.json: {e}")
+        return JSONResponse(status_code=500, content={"detail": "Failed to read metrics file"})
 
 
 @app.get("/")
