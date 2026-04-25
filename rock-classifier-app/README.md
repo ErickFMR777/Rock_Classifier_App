@@ -36,3 +36,10 @@ Granite, Basalt, Limestone, Sandstone, Shale, Slate, Marble, Quartzite, Gneiss, 
 - Geological information (formation, composition, uses)
 - Top 5 alternative matches
 - Responsive design
+---
+
+##  Licencia
+
+MIT
+
+---
