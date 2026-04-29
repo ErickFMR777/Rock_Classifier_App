@@ -12,6 +12,7 @@ from .config import ALLOWED_ORIGINS, API_HOST, API_PORT, API_RELOAD, LOG_LEVEL, 
 import json
 from .utils.model_loader import load_rock_model
 from .routers import classify, reference
+from .utils.rate_limiter import RateLimitMiddleware
 
 # Configure logging
 logging.basicConfig(level=LOG_LEVEL)
@@ -34,12 +35,16 @@ async def lifespan(app: FastAPI):
     logger.info("Rock Classifier API shutting down...")
 
 
+
 app = FastAPI(
     title="Rock Classifier API",
     description="Deep Learning API for rock classification from images",
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Rate limiting: 30 req/min por IP
+app.add_middleware(RateLimitMiddleware, max_requests=30, window_seconds=60)
 
 # CORS
 app.add_middleware(

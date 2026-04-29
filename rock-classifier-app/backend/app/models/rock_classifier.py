@@ -48,15 +48,11 @@ class RockClassifier:
         self.model.to(self.device)
 
         # Image preprocessing pipeline (ImageNet standard)
-        self.transform = transforms.Compose(
-            [
-                transforms.Resize((224, 224)),
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                ),
-            ]
-        )
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
     def _initialize_model(self) -> nn.Module:
         """Initialize model architecture matching the trained checkpoint."""
@@ -70,7 +66,7 @@ class RockClassifier:
                 if isinstance(checkpoint, dict):
                     architecture = checkpoint.get('architecture', 'resnet18')
             except Exception:
-                pass
+                logger.warning("Could not detect architecture from checkpoint, using default.")
 
         if 'resnet50' in architecture:
             model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)

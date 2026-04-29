@@ -42,6 +42,7 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 IMAGE_NORMALIZE_MEAN = [0.485, 0.456, 0.406]
 IMAGE_NORMALIZE_STD = [0.229, 0.224, 0.225]
 
+
 # ==================== CORS SETTINGS ====================
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -56,6 +57,11 @@ if codespace_name:
     github_domain = os.getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", "app.github.dev")
     ALLOWED_ORIGINS.append(f"https://{codespace_name}-5173.{github_domain}")
     ALLOWED_ORIGINS.append(f"https://{codespace_name}-8000.{github_domain}")
+
+# Add Vercel frontend domain if provided
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+if FRONTEND_URL:
+    ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 # ==================== CACHE SETTINGS ====================
 CACHE_MAX_AGE = 86400  # 24 hours

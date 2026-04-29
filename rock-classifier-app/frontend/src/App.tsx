@@ -7,13 +7,20 @@ import { LoadingSpinner } from './components/LoadingSpinner'
 import { RockCatalog } from './components/RockCatalog'
 import { AboutPage } from './components/AboutPage'
 import { classifyRock } from './api/client'
-import { ClassificationResult as IClassificationResult } from './types'
+
+interface PredictResponse {
+  success: boolean;
+  prediction?: string;
+  confidence?: number;
+  inference_time?: number;
+  error?: string;
+}
 import './styles/globals.css'
 
 function App() {
   const [page, setPage] = useState<Page>('classifier')
   const [image, setImage] = useState<File | null>(null)
-  const [result, setResult] = useState<IClassificationResult | null>(null)
+  const [result, setResult] = useState<PredictResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,8 +35,12 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const classificationResult = await classifyRock(image)
-      setResult(classificationResult)
+      const response = await classifyRock(image)
+      if (response.success) {
+        setResult(response)
+      } else {
+        setError(response.error || 'Classification failed.')
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Classification failed. Check that the backend is running.'
       setError(errorMessage)
@@ -128,8 +139,22 @@ function App() {
                     </div>
                   )}
 
-                  {result && !loading && (
-                    <ClassificationResult result={result} />
+                  {result && !loading && result.success && (
+                    <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center space-y-6">
+                      <h2 className="text-2xl font-black text-gray-900 mb-2">Prediction Result</h2>
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-4xl font-black text-amber-600">{result.prediction}</span>
+                        <span className="text-lg font-semibold text-gray-700">{(result.confidence! * 100).toFixed(1)}% confidence</span>
+                        <span className="text-xs text-gray-400">Inference time: {result.inference_time?.toFixed(3)}s</span>
+                      </div>
+                      {/* Transparencia del modelo */}
+                      <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-amber-700 text-sm flex items-center gap-2">
+                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span>
+                          ⚠️ La precisión del modelo depende de la cantidad de datos disponibles para cada tipo de roca. Algunas clases tienen menos imágenes de entrenamiento, lo que puede reducir la exactitud de la predicción. Aumentar la cantidad de imágenes por clase mejorará el rendimiento del modelo con el tiempo.
+                        </span>
+                      </div>
+                    </div>
                   )}
 
                   {!result && !loading && !error && (

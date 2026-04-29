@@ -402,6 +402,7 @@ ROCK_DATABASE = {
 
 
 @router.post("/rock", response_model=ClassificationResponse)
+@router.post("/predict", response_model=ClassificationResponse)
 async def classify_rock(request: Request, file: UploadFile = File(...)):
     """
     Classify a rock from an uploaded image.
