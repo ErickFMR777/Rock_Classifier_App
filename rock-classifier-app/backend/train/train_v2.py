@@ -406,8 +406,28 @@ def main():
             for name, stats in report_dict.items()
             if name in class_names
         }
+        # Confusion matrix and the real per-class image counts. The About page
+        # renders both so the reader can see exactly which classes are thin and
+        # which pairs the model actually confuses.
+        from sklearn.metrics import confusion_matrix
+        cm = confusion_matrix(
+            all_labels, all_preds, labels=list(range(num_classes))
+        ).tolist()
+
+        dataset_counts = {
+            name: int(count)
+            for name, count in zip(class_names, np.bincount(full_dataset.targets,
+                                                            minlength=num_classes))
+        }
+
         metrics = {
             "classification_report": per_class,
+            "confusion_matrix": cm,
+            "confusion_matrix_labels": class_names,
+            "dataset_counts": dataset_counts,
+            "dataset_total": int(sum(dataset_counts.values())),
+            "dataset_min_class": min(dataset_counts, key=dataset_counts.get),
+            "dataset_max_class": max(dataset_counts, key=dataset_counts.get),
             "val_accuracy": round(best_val_acc, 4),
             "val_samples": len(all_labels),
             "num_classes": num_classes,

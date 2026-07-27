@@ -114,6 +114,19 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
     });
   }
 
+  // Dataset composition and confusion matrix come from the backend's
+  // metrics.json; both are omitted when no backend is configured.
+  const datasetCounts: Record<string, number> | null = remoteMetrics?.dataset_counts ?? null;
+  const confusion: number[][] | null = remoteMetrics?.confusion_matrix ?? null;
+  const confusionLabels: string[] = remoteMetrics?.confusion_matrix_labels ?? [];
+
+  const countsSorted = datasetCounts
+    ? Object.entries(datasetCounts).sort((a, b) => a[1] - b[1])
+    : [];
+  const maxCount = countsSorted.length ? countsSorted[countsSorted.length - 1][1] : 0;
+  const datasetTotal: number | null = remoteMetrics?.dataset_total ?? null;
+  const thinClasses = countsSorted.filter(([, n]) => n < 40).map(([name]) => name);
+
   const sorted = [...displayedClassMetrics]
     .filter((m) => metricFilter === 'all' || m.category === metricFilter)
     .sort((a, b) => {
@@ -373,6 +386,157 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
         </div>
       </motion.div>
 
+      {/* Dataset composition & class balance */}
+      <motion.div {...fadeUp} transition={{ delay: 0.28 }}>
+        <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <span className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-amber-700 text-lg">📦</span>
+          Dataset &amp; Class Balance
+        </h3>
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-5">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Training images come from <strong>Wikimedia Commons</strong>, which re-hosts specimen
+            photography from recognised sources — notably <strong>GeoDIL</strong> (Geoscience Digital
+            Image Library), whose hand samples are shot against neutral backgrounds. Every image's
+            licence and author is recorded in the dataset manifest.
+          </p>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-sm text-amber-900 leading-relaxed">
+              <strong>This is a small, imbalanced dataset, and that is the main limit on accuracy.</strong>{' '}
+              Openly-licensed specimen photography simply does not exist in equal amounts for every
+              rock type. Common rocks like Granite, Basalt and Limestone have plenty; rare ones like
+              Dunite and Syenite have very few. Classes with fewer images are measurably less
+              reliable, and no amount of augmentation fully compensates for that.
+            </p>
+          </div>
+
+          {datasetCounts ? (
+            <>
+              <div className="flex items-baseline justify-between">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Images per class
+                </p>
+                {datasetTotal !== null && (
+                  <p className="text-xs text-gray-400">{datasetTotal} images total</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                {countsSorted.map(([name, n]) => {
+                  const pct = maxCount > 0 ? (n / maxCount) * 100 : 0;
+                  const tone =
+                    n < 25 ? 'bg-red-400' : n < 40 ? 'bg-amber-400' : 'bg-emerald-400';
+                  return (
+                    <div key={name} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-24 flex-shrink-0 truncate">{name}</span>
+                      <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                        <div className={`h-full ${tone} rounded-full`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-mono text-gray-500 w-8 text-right">{n}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-1">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> under 25 — unreliable</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> 25–39 — weak</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> 40+ — acceptable</span>
+              </div>
+              {thinClasses.length > 0 && (
+                <p className="text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
+                  <strong>Under-represented in this build:</strong>{' '}
+                  {thinClasses.join(', ')}. Predictions naming these types deserve extra scepticism,
+                  and the model is also biased <em>against</em> them — it will more often fall back
+                  on a well-represented class it has seen more of.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 italic">
+              Live dataset statistics load from the backend. Connect the classification API to see
+              the exact per-class image counts for the deployed model.
+            </p>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Confusion matrix */}
+      {confusion && confusionLabels.length > 0 && (
+        <motion.div {...fadeUp} transition={{ delay: 0.29 }}>
+          <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <span className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center text-violet-700 text-lg">🔀</span>
+            Confusion Matrix
+          </h3>
+          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Each row is the <strong>true</strong> rock type and each column what the model{' '}
+              <strong>predicted</strong>, on the held-out validation split. A perfect model would
+              light up only the diagonal. Off-diagonal cells are the real confusions — most of them
+              fall between genuinely similar rocks (Gneiss/Schist, Chalk/Limestone), which is the
+              expected failure mode rather than a bug.
+            </p>
+            <p className="text-xs text-gray-500">
+              Rows for thin classes are based on very few validation samples, so a single mistake
+              swings their score dramatically. Read those rows as indicative, not statistical.
+            </p>
+
+            <div className="overflow-x-auto">
+              <table className="border-collapse" style={{ fontSize: '9px' }}>
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 bg-white z-10" />
+                    {confusionLabels.map((l) => (
+                      <th key={l} className="p-0 h-20 w-5 align-bottom">
+                        <div
+                          className="text-gray-500 whitespace-nowrap origin-bottom-left translate-x-3 -rotate-90 w-5"
+                          style={{ transformOrigin: 'bottom left' }}
+                        >
+                          {l}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {confusion.map((row, i) => {
+                    const rowTotal = row.reduce((s, v) => s + v, 0);
+                    return (
+                      <tr key={confusionLabels[i]}>
+                        <td className="sticky left-0 bg-white z-10 pr-2 text-right text-gray-600 whitespace-nowrap">
+                          {confusionLabels[i]}
+                        </td>
+                        {row.map((v, j) => {
+                          const frac = rowTotal > 0 ? v / rowTotal : 0;
+                          const diag = i === j;
+                          const bg = v === 0
+                            ? 'transparent'
+                            : diag
+                              ? `rgba(16,185,129,${0.15 + frac * 0.75})`
+                              : `rgba(239,68,68,${0.15 + frac * 0.75})`;
+                          return (
+                            <td
+                              key={j}
+                              title={`True ${confusionLabels[i]} → predicted ${confusionLabels[j]}: ${v}`}
+                              className="w-5 h-5 text-center border border-gray-100 text-gray-700"
+                              style={{ background: bg }}
+                            >
+                              {v || ''}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" /> correct (diagonal)</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400" /> misclassified</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Limitations */}
       <motion.div {...fadeUp} transition={{ delay: 0.3 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
@@ -383,23 +547,39 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
           <ul className="space-y-3 text-sm text-gray-700">
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Small dataset:</strong> Only ~30 web-scraped images per class. More diverse, curated data would significantly improve accuracy.</span>
+              <span><strong>Small dataset:</strong> A few dozen images per class, not the thousands a robust classifier needs. This is the single biggest constraint on accuracy — bigger than the architecture or the training recipe.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Visual similarity:</strong> Rocks like Gneiss vs. Schist, Chalk vs. Limestone share visual features, leading to confusion.</span>
+              <span><strong>Unequal class coverage:</strong> Some rock types could not be represented well. Openly-licensed specimen photography is abundant for common rocks and scarce for rare ones, so classes like Dunite or Syenite are built from a handful of images. Their scores in the table above are unreliable in both directions.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Limited to 25 types:</strong> Rocks outside this catalogue will be misclassified as the closest match.</span>
+              <span><strong>Bias toward well-represented classes:</strong> When uncertain, the model drifts toward the types it saw most. Weighted sampling reduces this but does not remove it — a confident "Granite" on an ambiguous photo may just be the prior talking.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Demonstration tool:</strong> Not for professional geological assessments — always verify with a specialist.</span>
+              <span><strong>Small validation split:</strong> Metrics and the confusion matrix are computed on a 20% hold-out. For thin classes that is a couple of images, so one error moves the number by tens of percentage points. Treat per-class figures as indicative, not precise.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Image quality dependent:</strong> Blurry, dark, or distant photos will produce unreliable results.</span>
+              <span><strong>Visual similarity:</strong> Gneiss vs. Schist and Chalk vs. Limestone share visual features. These confusions are visible in the matrix above and are genuinely hard — geologists use hardness, reaction to acid and grain structure, none of which a photo captures.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
+              <span><strong>Specimen photos, not field photos:</strong> Training images are mostly hand samples on neutral backgrounds. Photos of outcrops, wet rocks or rocks in situ are further from what the model learned and will classify less reliably.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
+              <span><strong>Limited to 25 types:</strong> There is no "unknown" option. Rocks outside this catalogue are forced into the closest match and still reported with a confidence score.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
+              <span><strong>Demonstration tool:</strong> Not for professional geological assessment — always verify with a specialist.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
+              <span><strong>Image quality dependent:</strong> Blurry, dark or distant photos produce unreliable results.</span>
             </li>
           </ul>
         </div>

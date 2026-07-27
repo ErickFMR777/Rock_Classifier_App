@@ -63,6 +63,27 @@ DOWNLOAD_PAUSE = 0.35    # seconds between image downloads (keep-alive session)
 
 ALLOWED_EXT = (".jpg", ".jpeg", ".png")
 
+# A title carrying one of these is specimen photography regardless of what else
+# the filename mentions. Used by the top-up pass to waive SOFT_BLOCK.
+SPECIMEN_MARKERS = [
+    "geodil", "specimen", "sample", "hand ", "macro", "closeup", "close-up",
+    "close up", "muestra", "handstück", "handstuck",
+]
+
+# Never acceptable: wrong modality or unmistakably not a rock photo.
+HARD_BLOCK = [
+    "thin section", "thinsection", "photomicrograph", "micrograph", "microscope",
+    "microscopic", "polarized", "polarised", "xpl", "ppl", "sem ", "cathodolum",
+    "diagram", "map", "chart", "graph", "sketch", "drawing", "illustration",
+    "logo", "coat of arms", "flag", "seal of", "stamp", "coin", "banknote",
+    "cross section", "profile", "graph of", "plot of", "spectrum",
+    "portrait", "poster", "book", "cover", "title page", "page ", "manuscript",
+    "signature", "label only", "plaque",
+    "church", "cathedral", "basilica", "chapel", "temple", "mosque", "synagogue",
+    "statue", "sculpture", "bust", "relief", "carving", "tomb", "grave",
+    "headstone", "tombstone", "cemetery", "memorial", "obelisk",
+]
+
 # Rejected for every class: wrong subject, wrong modality or wrong scale.
 GLOBAL_BLOCK = [
     # architecture / worked stone
@@ -222,6 +243,47 @@ def _retry_delay(resp: requests.Response | None, attempt: int) -> float:
     return 1.5 * (attempt + 1)
 
 
+# Second-pass queries for classes the first pass leaves short. Commons is
+# multilingual, and petrological synonyms/varieties surface specimens that the
+# plain English name ranks too low to reach.
+EXTRA_QUERIES: dict[str, list[str]] = {
+    "Andesite": ["Andesit Gestein Handstück", "andesita roca muestra", "andésite échantillon",
+                 "basaltic andesite specimen", "hornblende andesite specimen",
+                 "pyroxene andesite sample", "andesite porphyry sample"],
+    "Dunite": ["Dunit Gestein", "dunita muestra", "olivinite specimen",
+               "olivine rock specimen", "dunite xenolith", "chromitite dunite sample"],
+    "Diorite": ["Diorit Gestein Handstück", "diorita muestra", "quartz diorite specimen",
+                "diorite porphyry sample", "tonalite specimen"],
+    "Flint": ["Feuerstein Gestein", "silex nodule geologie", "flint nodule chalk specimen",
+              "flint rock geology sample"],
+    "Pumice": ["Bimsstein Gestein", "piedra pómez muestra", "pumice specimen geology",
+               "pumice lapilli sample", "pumice pyroclastic specimen"],
+    "Syenite": ["Syenit Gestein", "sienita muestra", "nepheline syenite specimen",
+                "larvikite specimen"],
+    "Rhyolite": ["Rhyolith Gestein", "riolita muestra", "rhyolite porphyry specimen",
+                 "flow banded rhyolite sample"],
+    "Tuff": ["Tuffstein Gestein", "toba volcánica muestra", "welded tuff specimen",
+             "ignimbrite specimen"],
+    "Obsidian": ["Obsidian Gestein", "obsidiana muestra", "snowflake obsidian specimen"],
+    "Quartzite": ["Quarzit Gestein", "cuarcita muestra", "quartzite specimen geology"],
+    "Pegmatite": ["Pegmatit Gestein", "pegmatita muestra", "graphic granite specimen"],
+    "Porphyry": ["Porphyr Gestein", "pórfido muestra", "porphyritic texture specimen"],
+    "Gneiss": ["Gneis Gestein Handstück", "gneis muestra", "augen gneiss specimen"],
+    "Schist": ["Schiefer Gestein Handstück", "esquisto muestra", "garnet schist specimen"],
+    "Slate": ["Tonschiefer Gestein", "pizarra roca muestra", "slate specimen geology"],
+    "Marble": ["Marmor Gestein Handstück", "mármol roca muestra", "marble specimen geology"],
+    "Chalk": ["Kreide Gestein", "creta roca muestra", "chalk specimen geology"],
+    "Dolomite": ["Dolomit Gestein Handstück", "dolomía muestra", "dolostone specimen"],
+    "Breccia": ["Brekzie Gestein", "brecha roca muestra", "breccia specimen geology"],
+    "Conglomerate": ["Konglomerat Gestein", "conglomerado roca muestra"],
+    "Shale": ["Schiefer Tonstein", "lutita muestra", "shale specimen geology"],
+    "Limestone": ["Kalkstein Handstück", "caliza muestra", "limestone specimen geology"],
+    "Sandstone": ["Sandstein Handstück", "arenisca muestra", "sandstone specimen geology"],
+    "Basalt": ["Basalt Gestein Handstück", "basalto muestra", "basalt specimen geology"],
+    "Granite": ["Granit Gestein Handstück", "granito muestra"],
+}
+
+
 def api_get(params: dict, tries: int = 5) -> dict:
     params["format"] = "json"
     # maxlag is the courtesy flag Wikimedia asks automated clients to send.
@@ -266,10 +328,21 @@ def search_titles(query: str, limit: int = 120) -> list[str]:
     return titles
 
 
-def is_acceptable(title: str, blocked: list[str]) -> bool:
+def is_acceptable(title: str, blocked: list[str], relaxed: bool = False) -> bool:
+    """
+    `relaxed` is used by the top-up pass for under-represented classes. Volcanic
+    rocks in particular lose most of their specimen photography to the geographic
+    blocklist, because filenames legitimately name the volcano the sample came
+    from ("Andesite, Mount Shasta"). When the title also carries a specimen
+    marker, the geographic terms are waived; the hard blocks never are.
+    """
     low = title.lower()
     if not low.endswith(ALLOWED_EXT):
         return False
+    if any(word in low for word in HARD_BLOCK):
+        return False
+    if relaxed and any(marker in low for marker in SPECIMEN_MARKERS):
+        return True
     return not any(word in low for word in blocked)
 
 
@@ -347,7 +420,7 @@ def download(url: str, dest: Path, tries: int = 5) -> bool:
         return False
 
 
-def build_class(rock: str, manifest: dict) -> int:
+def build_class(rock: str, manifest: dict, relaxed: bool = False) -> int:
     cfg = CLASS_CONFIG.get(rock, {})
     blocked = GLOBAL_BLOCK + cfg.get("block", [])
     out_dir = DATASET_DIR / rock
@@ -365,11 +438,16 @@ def build_class(rock: str, manifest: dict) -> int:
     # duplicate images under new filenames and skew the class distribution.
     already: set[str] = {entry["title"] for entry in manifest.get(rock, [])}
 
+    if relaxed:
+        # Second pass: multilingual and varietal phrasings, and geographic terms
+        # waived when the title still reads as specimen photography.
+        queries = EXTRA_QUERIES.get(rock, []) + queries
+
     seen: set[str] = set(already)
     candidates: list[str] = []
     for q in queries:
         for t in search_titles(q, limit=80):
-            if t not in seen and is_acceptable(t, blocked):
+            if t not in seen and is_acceptable(t, blocked, relaxed=relaxed):
                 seen.add(t)
                 candidates.append(t)
         logger.info(f"[{rock}] '{q}' -> {len(candidates)} candidates so far")
@@ -400,16 +478,27 @@ def build_class(rock: str, manifest: dict) -> int:
 
 
 def main() -> None:
-    classes = json.loads(CLASSES_PATH.read_text())
-    wanted = sys.argv[1:] or classes
+    classes = json.loads(CLASSES_PATH.read_text(encoding="utf-8"))
+    args = sys.argv[1:]
+    # --topup: re-run only the classes still below target, with the widened
+    # query set and the relaxed filter, to flatten the class distribution.
+    relaxed = "--topup" in args
+    wanted = [a for a in args if not a.startswith("--")] or classes
     DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
-    manifest = json.loads(MANIFEST_PATH.read_text()) if MANIFEST_PATH.exists() else {}
+    # Explicit UTF-8: Commons artist names carry accents and Windows would
+    # otherwise default to cp1252 and abort the whole run on write.
+    manifest = (
+        json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        if MANIFEST_PATH.exists() else {}
+    )
 
     counts = {}
     for rock in wanted:
-        counts[rock] = build_class(rock, manifest)
-        MANIFEST_PATH.write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
+        counts[rock] = build_class(rock, manifest, relaxed=relaxed)
+        MANIFEST_PATH.write_text(
+            json.dumps(manifest, indent=1, ensure_ascii=False), encoding="utf-8"
+        )
 
     print("\n" + "=" * 46)
     print(f"{'Class':<15}{'Images':>8}")
