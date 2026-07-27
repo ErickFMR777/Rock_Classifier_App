@@ -21,7 +21,7 @@ COPY backend/requirements.txt ./requirements.txt
 # Install CPU-only torch first. The default PyPI wheels bundle CUDA and push the
 # image past 5 GB; the cpu index keeps it near 1 GB, which fits free tiers.
 RUN pip install --no-cache-dir \
-        torch==2.2.0 torchvision==0.17.0 \
+        torch==2.13.0 torchvision==0.28.0 \
         --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 

@@ -176,10 +176,12 @@ def train_one_epoch_mixup(model, dataloader, criterion, optimizer, device):
             optimizer.zero_grad()
             outputs = model(inputs)
 
-            # Mixup loss
-            loss = lam.unsqueeze(1).to(device) * criterion(outputs, labels1) + \
-                   (1 - lam.unsqueeze(1).to(device)) * criterion(outputs, labels2)
-            loss = loss.mean()
+            # Mixup loss. `criterion` uses reduction='none' so each sample is
+            # weighted by its own lambda; with reduction='mean' the per-sample
+            # weights would collapse onto a single scalar loss.
+            lam = lam.to(device).float()
+            loss = (lam * criterion(outputs, labels1) +
+                    (1 - lam) * criterion(outputs, labels2)).mean()
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
@@ -195,7 +197,7 @@ def train_one_epoch_mixup(model, dataloader, criterion, optimizer, device):
 
             optimizer.zero_grad()
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels).mean()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
             optimizer.step()
@@ -297,8 +299,10 @@ def main():
     # Create model
     model = create_model(num_classes).to(device)
 
-    # Loss with label smoothing
-    criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
+    # Loss with label smoothing. Mixup needs per-sample losses to weight by
+    # lambda; validation reduces to a mean explicitly.
+    criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, reduction="none")
+    val_criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
 
     # Optimizer with differential learning rates
     backbone_params = []
@@ -334,7 +338,7 @@ def main():
         epoch_start = time.time()
 
         train_loss, train_acc = train_one_epoch_mixup(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc, all_preds, all_labels = validate(model, val_loader, criterion, device)
+        val_loss, val_acc, all_preds, all_labels = validate(model, val_loader, val_criterion, device)
 
         scheduler.step(epoch)
 
@@ -379,10 +383,42 @@ def main():
         logger.info(f"Model saved to {MODEL_SAVE_PATH}")
 
         # Final report
-        val_loss, val_acc, all_preds, all_labels = validate(model, val_loader, criterion, device)
+        val_loss, val_acc, all_preds, all_labels = validate(model, val_loader, val_criterion, device)
         from sklearn.metrics import classification_report
         report = classification_report(all_labels, all_preds, target_names=class_names, zero_division=0)
         logger.info(f"\nClassification Report:\n{report}")
+
+        # Publish metrics for GET /api/model/metrics, which the About page reads
+        # to replace its bundled numbers. The frontend looks for a `f1` key, and
+        # sklearn emits `f1-score`, so both are written.
+        report_dict = classification_report(
+            all_labels, all_preds, target_names=class_names,
+            zero_division=0, output_dict=True,
+        )
+        per_class = {
+            name: {
+                "precision": round(stats["precision"], 4),
+                "recall": round(stats["recall"], 4),
+                "f1": round(stats["f1-score"], 4),
+                "f1-score": round(stats["f1-score"], 4),
+                "support": int(stats["support"]),
+            }
+            for name, stats in report_dict.items()
+            if name in class_names
+        }
+        metrics = {
+            "classification_report": per_class,
+            "val_accuracy": round(best_val_acc, 4),
+            "val_samples": len(all_labels),
+            "num_classes": num_classes,
+            "architecture": "resnet18_transfer",
+            "epochs_run": epoch + 1,
+            "train_images": train_size,
+            "trained_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "source": "Wikimedia Commons (GeoDIL and institutional specimen photography)",
+        }
+        (MODEL_DIR / "metrics.json").write_text(json.dumps(metrics, indent=2))
+        logger.info(f"Metrics written to {MODEL_DIR / 'metrics.json'}")
 
         # Per-class accuracy summary
         from collections import defaultdict

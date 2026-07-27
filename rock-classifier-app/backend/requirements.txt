@@ -5,10 +5,12 @@ pydantic==2.5.0
 python-multipart==0.0.6
 
 # Deep Learning & Image Processing
-torch==2.2.0
-torchvision==0.17.0
+# Pinned to the versions the checkpoint in models/ was trained and saved with.
+# Serving with a different major torch risks failing to load model_state_dict.
+torch==2.13.0
+torchvision==0.28.0
 Pillow==10.1.0
-numpy==1.26.4
+numpy>=2.0,<3
 
 # Database
 SQLAlchemy==2.0.23
