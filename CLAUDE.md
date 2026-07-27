@@ -68,16 +68,37 @@ predictions), `backend/app/routers/reference.py` (`ROCKS_DATABASE`, abridged), a
 the only one the Catalog UI actually reads — it does not call the API). Editing rock
 facts means touching all three.
 
-**Model weights are absent from the repo.** `*.pt` is gitignored, so `models/` ships
-only `rock_classes.json`. `RockClassifier` detects the architecture from the
-checkpoint (`resnet18` default, `resnet50` if the checkpoint says so) and, when
-weights are missing, falls back to an ImageNet backbone with a randomly initialized
-head. The API responds normally in that state but predictions are meaningless — check
-for the "weights not found" warning in the logs before debugging accuracy.
+**Model weights ARE tracked**, via a negation in both `.gitignore` files
+(`!models/rock_classifier.pt`, 44 MB) — the Dockerfile does `COPY models/`, so
+untracked weights would produce an image whose API returns noise. The 168 MB
+`checkpoint_last.pt` (resume state, includes optimiser) stays excluded, and
+`.gitattributes` marks `*.pt binary` so no checkout applies line-ending conversion
+to it. `RockClassifier` detects the architecture from the checkpoint
+(`resnet18_transfer` here) and, if weights are ever missing, silently falls back to
+an ImageNet backbone with a random head — the API still answers, but with noise.
+Check for "weights not found" in the logs before debugging accuracy.
 
-**About page metrics.** `AboutPage.tsx` ships hardcoded per-class metrics and tries
-`GET /api/model/metrics` to override them at runtime, falling back silently. The
-backend reads `metrics.json` from `MODELS_DIR`, which is also not in the repo.
+**The model is loaded once at startup** (FastAPI lifespan). Replacing
+`rock_classifier.pt` under a running server changes nothing until the process
+restarts, with no error to indicate it.
+
+**Current model**: ResNet18 transfer, 40.6% top-1 / 70.8% top-5 on a 298-image
+stratified hold-out. Per-class performance is very uneven (Chalk 83% F1, Pumice 0%)
+and tracks the class sizes in `metrics.json` → `dataset_counts`.
+
+**About page metrics.** `AboutPage.tsx` ships hardcoded per-class metrics as a
+fallback and overrides them from `GET /api/model/metrics` at runtime. The backend
+serves `metrics.json` from `MODELS_DIR`; it is tracked and carries the confusion
+matrix, top-k accuracy, macro/weighted averages and per-class dataset counts that
+four About sections render. Sections hide themselves when the field is absent.
+
+**The training dataset is not tracked** (~150 MB); `backend/train/download_commons.py`
+regenerates it from Wikimedia Commons and is resumable via `dataset/MANIFEST.json`,
+which *is* tracked and records each image's licence and author.
+
+**`backend/app/database/` is dead code.** `connection.py`, `crud.py` and
+`models/database.py` define a SQLAlchemy layer nothing imports; no tables are created
+and no `.db` file exists. The real rock data are the Python dicts described above.
 
 **Rate limiting** (`utils/rate_limiter.py`) is in-process and per-IP, resolved from
 `X-Forwarded-For` because hosted platforms put a proxy in front. It is skipped for

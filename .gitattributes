@@ -1,0 +1,16 @@
+# Git auto-detects these as binary today, but that detection is heuristic.
+# Marking them explicitly guarantees no checkout ever applies line-ending
+# conversion to them — doing so would silently corrupt the model checkpoint
+# and leave the API loading garbage weights with no obvious error.
+*.pt   binary
+*.pth  binary
+*.onnx binary
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.webp binary
+
+# Keep shell scripts LF so they run inside the Linux container regardless of
+# the platform they were committed from.
+*.sh text eol=lf
+Dockerfile text eol=lf
