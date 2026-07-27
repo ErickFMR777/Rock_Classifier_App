@@ -4,10 +4,13 @@ Clasificador de rocas por imagen con Deep Learning. Sube una foto y el modelo la
 identifica entre 25 tipos de roca, con información geológica y las cinco
 alternativas más probables.
 
+**En producción:** https://rock-classifier-app-erickfmr777s-projects.vercel.app
+
 ## Stack
 - **Frontend**: React 18 + TypeScript + Tailwind CSS + Framer Motion (Vite)
-- **Backend**: FastAPI + PyTorch 2.13 (CPU)
-- **Modelo**: ResNet18 con transfer learning desde ImageNet
+- **Inferencia**: funciones Python serverless en Vercel con onnxruntime
+- **Modelo**: ResNet18 con transfer learning desde ImageNet, exportado a ONNX
+- **Entrenamiento**: PyTorch 2.13 (solo local, no se despliega)
 
 ---
 
@@ -28,95 +31,103 @@ cifra relevante para el uso**: la pantalla de resultados muestra cinco candidato
 
 **Rendimiento muy desigual entre clases.** Chalk 83 % F1, Diorite 77 %, Slate 62 %;
 en el extremo opuesto Pumice acierta 0 de 6 y Dolomite tiene 14 % de recall. La
-correlación con el número de imágenes por clase es directa. La página **About** de
-la app muestra la matriz de confusión completa y el reparto real del dataset.
+correlación con el número de imágenes por clase es directa. La página **About**
+muestra la matriz de confusión completa y el reparto real del dataset.
+
+Latencia en producción: **57–152 ms** por imagen.
 
 > Es una herramienta de demostración, no de evaluación geológica profesional.
 
 ---
 
-## Arquitectura de despliegue
+## Arquitectura
 
-La aplicación se despliega en **dos servicios separados**:
+Todo vive en **un único despliegue de Vercel**. No hay segundo servicio, ni CORS,
+ni arranque en frío de un backend dormido.
 
 ```
-┌─────────────────────────┐        VITE_API_URL        ┌──────────────────────────┐
-│  Frontend (React/Vite)  │ ─────────────────────────► │  Backend (FastAPI+Torch) │
-│       Vercel            │ ◄───────────────────────── │  Render / Railway / Fly  │
-└─────────────────────────┘        FRONTEND_URL        └──────────────────────────┘
-                                     (CORS)
+Vercel
+├── Frontend estático (Vite build)  →  /
+└── Funciones Python (onnxruntime)  →  /api/*
+    └── api/_lib/rock_classifier.onnx   (45 MB)
 ```
 
-> **El backend no puede desplegarse en Vercel.** Sus funciones serverless tienen un
-> límite de 250 MB descomprimidos y solo el wheel de `torch` ya lo excede.
+**Por qué ONNX y no PyTorch.** El wheel de `torch` por sí solo excede el límite de
+250 MB por función de Vercel. `onnxruntime` + `numpy` + `pillow` + el modelo suman
+unos 146 MB, que sí cabe.
 
-Las secciones **Rock Catalog** y **About** funcionan sin backend (usan datos del
-bundle). Solo el clasificador requiere `VITE_API_URL`; si falta, la app muestra un
-aviso claro en lugar de fallar.
+**No es otro modelo.** El grafo ONNX es una conversión de formato del checkpoint
+entrenado, verificada por `export_onnx.py`: diferencia máxima de logits de ~3e-06
+frente a PyTorch y cero discrepancias de clase. El script aborta si eso deja de
+cumplirse.
 
-## 1. Desplegar el frontend en Vercel
+### Endpoints
 
-El repositorio incluye [`vercel.json`](../vercel.json) en la raíz, que ya apunta al
-subdirectorio correcto. No hace falta configurar *Root Directory* en el dashboard.
-
-1. Importa el repositorio en Vercel.
-2. En **Settings → Environment Variables** añade `VITE_API_URL` con la URL del
-   backend desplegado. Se acepta con o sin sufijo `/api`; el cliente lo normaliza.
-3. Deploy.
-
-> `VITE_API_URL` se inyecta en **tiempo de build**. Si la cambias, hay que
-> redesplegar para que surta efecto.
-
-## 2. Desplegar el backend
-
-### Opción A — Render (blueprint incluido)
-
-1. En Render: **New → Blueprint** y selecciona el repositorio ([`render.yaml`](../render.yaml)).
-2. Configura `FRONTEND_URL` con tu dominio de Vercel, sin barra final.
-3. Deploy. El healthcheck es `/api/health`.
-
-### Opción B — Docker
-
-```bash
-cd rock-classifier-app
-docker build -t rock-classifier-api -f Dockerfile .
-docker run -p 8000:8000 -e FRONTEND_URL=https://tu-app.vercel.app rock-classifier-api
-```
-
-El `Dockerfile` instala **torch CPU-only**, lo que mantiene la imagen cerca de 1 GB
-en lugar de más de 5 GB con CUDA.
-
-> ⚠️ **El modelo se carga una sola vez al arrancar.** Si actualizas
-> `rock_classifier.pt`, hay que **reiniciar el servicio**: subir el archivo no basta,
-> el proceso en marcha seguirá sirviendo los pesos antiguos sin dar ningún error.
-
-### Variables de entorno del backend
-
-| Variable | Descripción | Por defecto |
+| Método | Ruta | Fichero |
 |---|---|---|
-| `PORT` | Puerto de escucha (lo inyecta la plataforma) | `8000` |
-| `FRONTEND_URL` | Origen del frontend en producción, para CORS | — |
-| `ALLOWED_ORIGINS` | Orígenes extra separados por coma | — |
-| `VERCEL_PREVIEW_REGEX` | Regex de CORS para *preview deployments* | `^https://.*\.vercel\.app$` |
-| `MODELS_DIR` | Ruta a pesos y clases | `../models` |
-| `API_RELOAD` | Auto-reload (solo desarrollo) | `false` |
-| `LOG_LEVEL` | Nivel de logging | `INFO` |
+| `POST` | `/api/classify/rock` | `api/classify/rock.py` |
+| `GET` | `/api/reference/rocks` | `api/reference/rocks.py` |
+| `GET` | `/api/model/metrics` | `api/model/metrics.py` |
+| `GET` | `/api/health` | `api/health.py` |
 
-Vercel genera un dominio distinto en cada *preview deployment*, así que una lista
-fija de orígenes nunca los cubriría; de ahí el regex.
+Respuesta de `/api/classify/rock`:
+```json
+{
+  "primary": { "class": "Diorite", "confidence": 0.894, "type": "Igneous - Intrusive", "...": "..." },
+  "alternatives": [{ "class": "Dunite", "confidence": 0.03 }],
+  "inference_time_ms": 152
+}
+```
+
+`api/_lib/rocks.json` es la **fuente única** de los datos geológicos: lo leen tanto
+el catálogo como el enriquecimiento de la predicción, así que no pueden divergir.
+
+---
+
+## Despliegue
+
+El repositorio está conectado a Vercel: **cada push a `main` despliega solo**. No
+hay variables de entorno obligatorias.
+
+Despliegue manual desde el CLI:
+```bash
+vercel deploy --prod
+```
+
+### Ajustes del proyecto que deben permanecer así
+
+Estos tres causaron 14 horas de despliegues fallidos y **no se arreglan tocando el
+código** — viven en la configuración del proyecto en Vercel:
+
+| Ajuste | Valor correcto | Si se rompe |
+|---|---|---|
+| **Root Directory** | *(vacío / raíz)* | Con `rock-classifier-app/backend`, el install command busca un `package.json` duplicado inexistente y el build falla |
+| **Framework Preset** | *(Other / null)* | Con `fastapi` interfiere con el build del frontend |
+| **Deployment Protection** | *(desactivado)* | Con SSO activo y sin dominio propio, toda la app queda tras el login de Vercel |
+
+### Restricciones del runtime
+
+- Vercel ejecuta **CPython 3.12**. `onnxruntime` solo publica wheels `cp312` desde
+  la versión **1.24**; un pin anterior falla al resolver dependencias en el build.
+- El parseo multipart usa `email` de la stdlib, **no `cgi`**: ese módulo fue
+  eliminado en Python 3.13 y rompería la función en cuanto Vercel actualice.
+- El rewrite SPA de `vercel.json` excluye `/api/*`. Sin esa exclusión, el catch-all
+  se traga las llamadas a la API y devuelve el HTML.
+
+### Alternativa: backend en contenedor
+
+Se conservan `Dockerfile` y `render.yaml` por si algún día conviene servir la
+inferencia con PyTorch en Render, Railway o Fly. En ese caso hay que definir
+`VITE_API_URL` en Vercel apuntando al servicio, y `FRONTEND_URL` en el backend
+para el CORS. **No es necesario para el despliegue actual.**
+
+> Si usas esa vía: el modelo se carga una sola vez al arrancar, así que reemplazar
+> los pesos exige **reiniciar el servicio**. Subir el archivo no basta y no da
+> ningún aviso.
 
 ---
 
 ## Desarrollo local
-
-**Backend:**
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate     # venv\Scripts\activate en Windows
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
 
 **Frontend:**
 ```bash
@@ -125,31 +136,19 @@ npm install
 npm run dev
 ```
 
-No hace falta `VITE_API_URL` en desarrollo: Vite hace proxy de `/api` a
-`http://localhost:8000` (configurable con `BACKEND_ORIGIN`).
+Vite hace proxy de `/api` a `http://localhost:8000`, así que para el clasificador
+hace falta levantar el backend FastAPI:
 
-## Endpoints
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/classify/rock` | Clasificación de imagen |
-| `GET` | `/api/reference/rocks` | Catálogo de rocas |
-| `GET` | `/api/reference/rocks/{name}` | Detalle de un tipo |
-| `GET` | `/api/model/metrics` | Métricas del entrenamiento |
-| `GET` | `/api/health` | Health check |
-
-Respuesta de `/api/classify/rock`:
-```json
-{
-  "primary": { "class": "Granite", "confidence": 0.87, "type": "Igneous - Intrusive", "...": "..." },
-  "alternatives": [{ "class": "Diorite", "confidence": 0.06 }],
-  "inference_time_ms": 412
-}
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate     # venv\Scripts\activate en Windows
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-Hay un límite de **30 peticiones por minuto y por IP**. La IP se resuelve desde
-`X-Forwarded-For`, porque detrás del proxy de Render todas las peticiones llegarían
-con la misma dirección y compartirían un único cupo.
+> `backend/` mantiene la implementación FastAPI+PyTorch para desarrollo y como
+> alternativa en contenedor. **Lo que corre en producción es `api/`.**
 
 ---
 
@@ -192,16 +191,18 @@ consultas en alemán, español y francés además de variedades petrológicas.
 
 ```bash
 cd backend/train
-python train_v2.py
+python train_v2.py        # ~156 min en CPU (8 hilos, lote 32, 30 épocas)
+python export_onnx.py     # genera el ONNX que se despliega
 ```
 
-Unos **156 minutos en CPU** (8 hilos, lote 32, 30 épocas). Produce
-`models/rock_classifier.pt` y `models/metrics.json`.
+`train_v2.py` produce `models/rock_classifier.pt` y `models/metrics.json`.
+`export_onnx.py` produce `models/rock_classifier.onnx`, que hay que copiar a
+`api/_lib/` junto con `metrics.json` para que el despliegue los recoja.
 
 **Es reanudable.** Escribe `models/checkpoint_last.pt` después de cada época con el
 estado del modelo, el optimizador y el scheduler; si el proceso muere, la siguiente
-ejecución continúa desde la última época completada en vez de empezar de cero. Ese
-checkpoint pesa 168 MB y está excluido de git a propósito.
+ejecución continúa desde la última época completada. Ese checkpoint pesa 168 MB y
+está excluido de git a propósito.
 
 Técnicas: transfer learning desde ImageNet, mixup (α=0.2), label smoothing (0.1),
 muestreo ponderado para compensar el desbalance, cosine annealing con warm restarts,

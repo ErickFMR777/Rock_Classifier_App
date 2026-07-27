@@ -2,105 +2,112 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Live: https://rock-classifier-app-erickfmr777s-projects.vercel.app
+
 ## Commands
 
-All frontend commands run from `rock-classifier-app/frontend/`:
+Frontend, from `rock-classifier-app/frontend/`:
 
 ```bash
 npm install
-npm run dev      # Vite dev server on :5173, proxies /api -> localhost:8000
+npm run dev      # Vite on :5173, proxies /api -> localhost:8000
 npm run build    # tsc && vite build — tsc runs first, so ANY type error fails the build
-npm run preview
 ```
 
-Backend, from `rock-classifier-app/backend/`:
+Training and data, from `rock-classifier-app/backend/train/`:
 
 ```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000     # docs at /docs
+python download_commons.py [--topup] [Class ...]   # rebuild dataset/
+python train_v2.py                                 # ~156 min CPU, writes .pt + metrics.json
+python export_onnx.py                              # writes .onnx, aborts if it diverges from torch
 ```
 
-Docker image for the inference service, from `rock-classifier-app/`:
+Deploy (repo is git-connected, so a push to `main` deploys automatically):
 
 ```bash
-docker build -t rock-classifier-api -f Dockerfile .
+vercel deploy --prod
+vercel api "/v9/projects/<id>?teamId=<team>"       # read/patch project settings
 ```
 
-`requirements.txt` pins pytest/pytest-asyncio but `backend/tests/` contains only
-`__init__.py` — there is no test suite yet.
+`requirements.txt` at the repo root is for the **Vercel functions**;
+`rock-classifier-app/backend/requirements.txt` is the local FastAPI/PyTorch stack.
+`backend/tests/` contains only `__init__.py` — there is no test suite.
 
-## Deployment split (the central constraint)
+## Architecture: one Vercel deployment, two codebases for inference
 
-The app deploys as **two services**, and this is not a preference — PyTorch cannot
-run on Vercel. The `torch` wheel alone exceeds Vercel's 250 MB serverless function
-limit. Do not try to move the backend into `api/` functions.
+Everything runs in a single Vercel project. **`api/` is what production executes**;
+`rock-classifier-app/backend/` is the FastAPI+PyTorch implementation kept for local
+development and as a container fallback (`Dockerfile`, `render.yaml`). They
+implement the same HTTP contract and can drift — change both or neither.
 
-- **Frontend → Vercel.** Root `vercel.json` drives the build; it uses `--prefix` to
-  reach into `rock-classifier-app/frontend`, so the repo needs no Root Directory
-  setting in the dashboard.
-- **Backend → container host** (Render blueprint in `render.yaml`, or any Docker
-  platform). Binds `$PORT`; the Dockerfile installs CPU-only torch from
-  `download.pytorch.org/whl/cpu` to keep the image ~1 GB instead of >5 GB.
+Production inference is `api/classify/rock.py` running **onnxruntime**, not torch:
+the torch wheel alone exceeds Vercel's 250 MB function limit, while onnxruntime +
+numpy + pillow + the 45 MB model come to ~146 MB. The ONNX graph is a format
+conversion of the trained checkpoint, not a different model — `export_onnx.py`
+verifies logits agree to ~3e-06 and **exits non-zero if they diverge**.
 
-The two are wired by two env vars that must agree:
-`VITE_API_URL` (frontend → backend, **baked in at build time**, so changing it
-requires a redeploy) and `FRONTEND_URL` (backend CORS → frontend origin).
+`api/_lib/` holds the deployed artefacts (`rock_classifier.onnx`,
+`rock_classes.json`, `metrics.json`, `rocks.json`) and is pulled into the function
+bundle via `includeFiles` in `vercel.json`. **After retraining, copy the new
+`.onnx` and `metrics.json` from `models/` into `api/_lib/`** — nothing does this
+automatically.
 
-## Architecture notes
+## Things that will bite you
 
-**API contract.** `POST /api/classify/rock` returns
-`{primary: RockInfo, alternatives: AlternativeMatch[], inference_time_ms}`.
-`RockInfo` is serialized with the field alias `class` (FastAPI defaults to
-`response_model_by_alias=True`), which is why the TS type uses `class` and not
-`rock_class`. Every route is mounted under `/api`; `src/api/client.ts` normalizes
-`VITE_API_URL` so both `https://host` and `https://host/api` work.
+**Vercel project settings live outside the repo** and caused 14 hours of failing
+builds. `rootDirectory` must be empty (it was `rock-classifier-app/backend`, which
+made the install command resolve to a duplicated non-existent path), `framework`
+must be null (it was `fastapi`), and `ssoProtection` must be off or the whole app
+sits behind a Vercel login. No code change fixes these; patch them via `vercel api`.
 
-**Graceful degradation is load-bearing.** `isApiConfigured` in `client.ts` is
-`false` when `VITE_API_URL` is unset in a production build. The Catalog and About
-sections are driven by data bundled at build time and work without any backend;
-only the classifier depends on it. Keep this property — it's what makes a Vercel
-deploy succeed standalone.
+**The Vercel runtime is CPython 3.12.** onnxruntime only ships `cp312` manylinux
+wheels from 1.24 onward, so older pins fail dependency resolution at build time.
+Multipart parsing uses stdlib `email`, deliberately not `cgi` — that module was
+removed in 3.13 and would break the function on a runtime bump.
 
-**Rock data is duplicated in three places**, deliberately or not, and they drift:
-`backend/app/routers/classify.py` (`ROCK_DATABASE`, full geology, used to enrich
-predictions), `backend/app/routers/reference.py` (`ROCKS_DATABASE`, abridged), and
-`frontend/src/components/RockCatalog.tsx` (`ROCK_CATALOG`, with emoji/category, and
-the only one the Catalog UI actually reads — it does not call the API). Editing rock
-facts means touching all three.
+**The SPA rewrite in `vercel.json` excludes `/api/`.** A plain `/(.*)` catch-all
+swallows API calls and returns HTML instead.
 
-**Model weights ARE tracked**, via a negation in both `.gitignore` files
-(`!models/rock_classifier.pt`, 44 MB) — the Dockerfile does `COPY models/`, so
-untracked weights would produce an image whose API returns noise. The 168 MB
-`checkpoint_last.pt` (resume state, includes optimiser) stays excluded, and
-`.gitattributes` marks `*.pt binary` so no checkout applies line-ending conversion
-to it. `RockClassifier` detects the architecture from the checkpoint
-(`resnet18_transfer` here) and, if weights are ever missing, silently falls back to
-an ImageNet backbone with a random head — the API still answers, but with noise.
-Check for "weights not found" in the logs before debugging accuracy.
+**Model weights are tracked**, via negations in both `.gitignore` files:
+`rock_classifier.pt` (44 MB, training artefact) and `rock_classifier.onnx` (45 MB,
+what deploys). `checkpoint_last.pt` (168 MB, carries optimiser state) is excluded.
+`.gitattributes` marks `*.pt`/`*.onnx` as binary so no checkout applies line-ending
+conversion and silently corrupts them.
 
-**The model is loaded once at startup** (FastAPI lifespan). Replacing
-`rock_classifier.pt` under a running server changes nothing until the process
-restarts, with no error to indicate it.
+**If the container path is ever used**: the model loads once at FastAPI startup, so
+replacing weights under a running server changes nothing until the process
+restarts, with no error to indicate it. This bit during verification — the app
+served noise from stale in-memory weights while the correct file sat on disk.
 
-**Current model**: ResNet18 transfer, 40.6% top-1 / 70.8% top-5 on a 298-image
-stratified hold-out. Per-class performance is very uneven (Chalk 83% F1, Pumice 0%)
-and tracks the class sizes in `metrics.json` → `dataset_counts`.
+## Data and model notes
+
+**Current model**: ResNet18 transfer, 40.6 % top-1 / 70.8 % top-5 on a 298-image
+stratified hold-out, 57–152 ms per inference in production. Per-class performance
+is very uneven (Chalk 83 % F1, Pumice 0 %) and tracks class size in `metrics.json`
+→ `dataset_counts`.
+
+**The train/val split is stratified by hand**, not `random_split` — the latter gave
+Basalt 11 % and Quartzite 34 % validation instead of 20 %, which both distorted the
+per-class metrics and added an unintended second imbalance.
+
+**`api/_lib/rocks.json` is the single source** for rock geology, read by both the
+catalogue endpoint and the prediction enrichment. `RockCatalog.tsx` still carries
+its own hardcoded copy with emoji/category and does not call the API, so editing
+rock facts means touching both. `backend/app/routers/` also has the original dicts
+that `rocks.json` was extracted from.
+
+**The dataset is not tracked** (~150 MB). `download_commons.py` rebuilds it from
+Wikimedia Commons and is resumable via `dataset/MANIFEST.json`, which *is* tracked
+and records each image's licence and author. Its filtering is load-bearing: Commons
+category listings are dominated by landscapes and buildings, and GeoDIL titles a
+thin section identically to a hand sample — only the description and categories
+distinguish them.
 
 **About page metrics.** `AboutPage.tsx` ships hardcoded per-class metrics as a
-fallback and overrides them from `GET /api/model/metrics` at runtime. The backend
-serves `metrics.json` from `MODELS_DIR`; it is tracked and carries the confusion
-matrix, top-k accuracy, macro/weighted averages and per-class dataset counts that
-four About sections render. Sections hide themselves when the field is absent.
-
-**The training dataset is not tracked** (~150 MB); `backend/train/download_commons.py`
-regenerates it from Wikimedia Commons and is resumable via `dataset/MANIFEST.json`,
-which *is* tracked and records each image's licence and author.
+fallback and overrides them from `GET /api/model/metrics`. Four sections (dataset
+balance, confusion matrix, top-k, macro-vs-weighted) render only when the
+corresponding field is present, and hide themselves otherwise.
 
 **`backend/app/database/` is dead code.** `connection.py`, `crud.py` and
-`models/database.py` define a SQLAlchemy layer nothing imports; no tables are created
-and no `.db` file exists. The real rock data are the Python dicts described above.
-
-**Rate limiting** (`utils/rate_limiter.py`) is in-process and per-IP, resolved from
-`X-Forwarded-For` because hosted platforms put a proxy in front. It is skipped for
-`OPTIONS` so CORS preflight is never throttled. In-process state means the limit is
-per instance and resets on deploy.
+`models/database.py` define a SQLAlchemy layer nothing imports; no tables are
+created and no `.db` file exists.
