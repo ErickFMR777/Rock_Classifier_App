@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { isApiConfigured } from '../api/client';
 
 export type Page = 'classifier' | 'catalog' | 'about';
 
@@ -82,8 +83,12 @@ export const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChang
 
           {/* Status Badge */}
           <div className="hidden md:flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            AI Online
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isApiConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'
+              }`}
+            ></span>
+            {isApiConfigured ? 'AI Online' : 'AI Offline'}
           </div>
         </div>
       </div>

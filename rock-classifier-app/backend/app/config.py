@@ -23,8 +23,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/database.db")
 
 # ==================== API CONFIGURATION ====================
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
-API_PORT = int(os.getenv("API_PORT", 8000))
-API_RELOAD = os.getenv("API_RELOAD", "true").lower() == "true"
+# Render/Railway/Fly inject the port to bind as $PORT; fall back to API_PORT locally.
+API_PORT = int(os.getenv("PORT") or os.getenv("API_PORT") or 8000)
+# Auto-reload must stay off in production; opt in explicitly for local development.
+API_RELOAD = os.getenv("API_RELOAD", "false").lower() == "true"
 
 # ==================== ML MODELS ====================
 ROCK_MODEL_PATH = MODELS_DIR / "rock_classifier.pt"
@@ -58,10 +60,27 @@ if codespace_name:
     ALLOWED_ORIGINS.append(f"https://{codespace_name}-5173.{github_domain}")
     ALLOWED_ORIGINS.append(f"https://{codespace_name}-8000.{github_domain}")
 
-# Add Vercel frontend domain if provided
+# Production frontend origin(s). FRONTEND_URL holds the primary Vercel domain;
+# ALLOWED_ORIGINS accepts a comma-separated list for custom domains.
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 if FRONTEND_URL:
-    ALLOWED_ORIGINS.append(FRONTEND_URL)
+    ALLOWED_ORIGINS.append(FRONTEND_URL.rstrip("/"))
+
+_extra_origins = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS.extend(
+    origin.strip().rstrip("/") for origin in _extra_origins.split(",") if origin.strip()
+)
+
+# De-duplicate while preserving order.
+ALLOWED_ORIGINS = list(dict.fromkeys(ALLOWED_ORIGINS))
+
+# Vercel mints a new domain for every preview deployment, so an exact-match list
+# can never cover them. This regex allows preview URLs of the project without
+# opening CORS up to the whole internet. Override with VERCEL_PREVIEW_REGEX,
+# or set it empty to allow only the exact origins listed above.
+ALLOWED_ORIGIN_REGEX = os.getenv(
+    "VERCEL_PREVIEW_REGEX", r"^https://.*\.vercel\.app$"
+) or None
 
 # ==================== CACHE SETTINGS ====================
 CACHE_MAX_AGE = 86400  # 24 hours

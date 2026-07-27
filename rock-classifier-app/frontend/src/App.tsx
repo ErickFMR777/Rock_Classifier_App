@@ -6,21 +6,14 @@ import { ClassificationResult } from './components/ClassificationResult'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { RockCatalog } from './components/RockCatalog'
 import { AboutPage } from './components/AboutPage'
-import { classifyRock } from './api/client'
-
-interface PredictResponse {
-  success: boolean;
-  prediction?: string;
-  confidence?: number;
-  inference_time?: number;
-  error?: string;
-}
+import { classifyRock, isApiConfigured } from './api/client'
+import { ClassificationResult as ClassificationResultData } from './types'
 import './styles/globals.css'
 
 function App() {
   const [page, setPage] = useState<Page>('classifier')
   const [image, setImage] = useState<File | null>(null)
-  const [result, setResult] = useState<PredictResponse | null>(null)
+  const [result, setResult] = useState<ClassificationResultData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,14 +29,9 @@ function App() {
     setError(null)
     try {
       const response = await classifyRock(image)
-      if (response.success) {
-        setResult(response)
-      } else {
-        setError(response.error || 'Classification failed.')
-      }
+      setResult(response)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Classification failed. Check that the backend is running.'
-      setError(errorMessage)
+      setError(err instanceof Error ? err.message : 'Classification failed.')
     } finally {
       setLoading(false)
     }
@@ -74,6 +62,24 @@ function App() {
                 </p>
               </div>
 
+              {/* Backend not configured notice — keeps the deploy usable instead of failing silently */}
+              {!isApiConfigured && (
+                <div className="mb-8 bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+                  <svg className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-amber-800 text-sm">Classification backend not connected</p>
+                    <p className="text-amber-700 text-sm mt-0.5">
+                      The deep learning model runs on a separate service. Set the{' '}
+                      <code className="font-mono text-xs bg-amber-100 px-1.5 py-0.5 rounded">VITE_API_URL</code>{' '}
+                      environment variable in your Vercel project and redeploy to enable image classification.
+                      The Rock Catalog and About sections work without it.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 {/* Left: Upload */}
                 <div className="lg:col-span-2 space-y-5">
@@ -83,9 +89,9 @@ function App() {
                     {image && (
                       <button
                         onClick={handleClassify}
-                        disabled={loading}
+                        disabled={loading || !isApiConfigured}
                         className={`w-full mt-5 py-3.5 rounded-xl font-bold text-base transition-all duration-300 shadow-md hover:shadow-lg ${
-                          loading
+                          loading || !isApiConfigured
                             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                             : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white'
                         }`}
@@ -95,7 +101,7 @@ function App() {
                             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                             Classifying...
                           </span>
-                        ) : 'Classify Rock'}
+                        ) : isApiConfigured ? 'Classify Rock' : 'Backend Unavailable'}
                       </button>
                     )}
                   </div>
@@ -127,7 +133,7 @@ function App() {
                     </div>
                   )}
 
-                  {error && (
+                  {error && !loading && (
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-3">
                       <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -139,17 +145,13 @@ function App() {
                     </div>
                   )}
 
-                  {result && !loading && result.success && (
-                    <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center space-y-6">
-                      <h2 className="text-2xl font-black text-gray-900 mb-2">Prediction Result</h2>
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="text-4xl font-black text-amber-600">{result.prediction}</span>
-                        <span className="text-lg font-semibold text-gray-700">{(result.confidence! * 100).toFixed(1)}% confidence</span>
-                        <span className="text-xs text-gray-400">Inference time: {result.inference_time?.toFixed(3)}s</span>
-                      </div>
-                      {/* Transparencia del modelo */}
-                      <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-amber-700 text-sm flex items-center gap-2">
-                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  {result && !loading && (
+                    <div className="space-y-5">
+                      <ClassificationResult result={result} />
+
+                      {/* Model transparency notice */}
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-amber-700 text-sm flex items-start gap-2">
+                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span>
                           ⚠️ La precisión del modelo depende de la cantidad de datos disponibles para cada tipo de roca. Algunas clases tienen menos imágenes de entrenamiento, lo que puede reducir la exactitud de la predicción. Aumentar la cantidad de imágenes por clase mejorará el rendimiento del modelo con el tiempo.
                         </span>

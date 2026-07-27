@@ -8,7 +8,15 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
-from .config import ALLOWED_ORIGINS, API_HOST, API_PORT, API_RELOAD, LOG_LEVEL, MODELS_DIR
+from .config import (
+    ALLOWED_ORIGINS,
+    ALLOWED_ORIGIN_REGEX,
+    API_HOST,
+    API_PORT,
+    API_RELOAD,
+    LOG_LEVEL,
+    MODELS_DIR,
+)
 import json
 from .utils.model_loader import load_rock_model
 from .routers import classify, reference
@@ -46,14 +54,19 @@ app = FastAPI(
 # Rate limiting: 30 req/min por IP
 app.add_middleware(RateLimitMiddleware, max_requests=30, window_seconds=60)
 
-# CORS
+# CORS. `allow_origin_regex` covers Vercel preview deployments, whose domain
+# changes on every push and therefore cannot be enumerated in ALLOWED_ORIGINS.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+logger.info(f"CORS allowed origin regex: {ALLOWED_ORIGIN_REGEX}")
 
 # Routers
 app.include_router(classify.router, prefix="/api/classify", tags=["Classification"])

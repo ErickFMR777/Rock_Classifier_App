@@ -1,0 +1,10 @@
+frontend/
+dataset/
+**/__pycache__/
+**/*.py[cod]
+**/venv/
+**/.env
+**/*.db
+backend/data/*.db
+backend/train/
+.git/

@@ -15,6 +15,7 @@ export interface AlternativeMatch {
   confidence: number;
 }
 
+/** Response of POST /api/classify/rock */
 export interface ClassificationResult {
   primary: RockInfo;
   alternatives: AlternativeMatch[];
@@ -28,4 +29,19 @@ export interface Rock {
   color: string;
   grain_size: string;
   description: string;
+}
+
+/** Response of GET /api/reference/rocks */
+export interface RocksListResponse {
+  rocks: Rock[];
+  total: number;
+}
+
+/** Response of GET /api/model/metrics — shape depends on the training run. */
+export interface ModelMetrics {
+  classification_report?: Record<
+    string,
+    { precision: number; recall: number; 'f1-score': number; support: number }
+  >;
+  [key: string]: unknown;
 }

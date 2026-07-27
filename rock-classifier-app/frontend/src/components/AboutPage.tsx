@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { getModelMetrics } from '../api/client';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -129,15 +130,18 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
     ? displayedClassMetrics.reduce((s, m) => s + m.recall * m.support, 0) / totalSupport
     : avgRecall;
 
-  // Fetch remote metrics.json on mount (non-blocking). Fallback kept if unavailable.
+  // Fetch remote metrics on mount (non-blocking). Goes through the API client so it
+  // honours VITE_API_URL; falls back to the bundled `classMetrics` when unavailable.
   useEffect(() => {
-    fetch('/api/model/metrics')
-      .then((res) => {
-        if (!res.ok) throw new Error('no-metrics');
-        return res.json();
+    let cancelled = false;
+    getModelMetrics()
+      .then((data) => {
+        if (!cancelled && data) setRemoteMetrics(data);
       })
-      .then((data) => setRemoteMetrics(data))
       .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

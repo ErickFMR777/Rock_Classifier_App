@@ -36,5 +36,5 @@ dataset/
 *.tmp
 /tmp/
 
-# Package lock
-frontend/package-lock.json
+# NOTE: frontend/package-lock.json is intentionally committed.
+# Vercel needs it for reproducible installs.

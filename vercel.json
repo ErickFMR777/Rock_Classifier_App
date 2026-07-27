@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install --prefix rock-classifier-app/frontend",
+  "buildCommand": "npm run build --prefix rock-classifier-app/frontend",
+  "outputDirectory": "rock-classifier-app/frontend/dist",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
