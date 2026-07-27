@@ -346,8 +346,44 @@ def is_acceptable(title: str, blocked: list[str], relaxed: bool = False) -> bool
     return not any(word in low for word in blocked)
 
 
+# Filename filtering alone cannot see these: GeoDIL names a thin section
+# "Alkalic granite (GeoDIL number - 1515)", identical in form to a hand sample.
+# The description and the Commons categories do say so, and a thin section
+# under the microscope looks nothing like the photo a user will upload.
+CONTENT_REJECT = [
+    "thin section", "thinsection", "polarized", "polarised", "photomicrograph",
+    "micrograph", "microscope", "microscopic", "field of view", "magnification",
+    "petrographic", "sem image", "electron micrograph", "in xpl", "in ppl",
+    "cross-polar", "plane light", "plane-polarized", "plane polarized",
+]
+
+# Description terms that mean the photo is of scenery, not a specimen.
+SCENE_REJECT = [
+    "national park", "state park", "canyon", "gorge", "cliff face", "outcrop of",
+    "roadcut", "quarry wall", "mountain range", "aerial view", "panorama",
+    "shoreline", "coastline", "seen from", "landscape of",
+]
+
+# A Commons category like "Granite samples from Vermont" is a positive marker.
+SAMPLE_CATEGORY_HINT = "samples"
+
+
+def _clean(html: str) -> str:
+    return re.sub("<[^>]+>", " ", html or "").replace("&nbsp;", " ").strip()
+
+
+def content_is_specimen(description: str, categories: str) -> bool:
+    """Reject microscopy and scenery using the description and categories."""
+    blob = f"{description} {categories}".lower()
+    if any(term in blob for term in CONTENT_REJECT):
+        return False
+    if SAMPLE_CATEGORY_HINT in categories.lower():
+        return True  # explicit hand-sample category outweighs scenery guesses
+    return not any(term in blob for term in SCENE_REJECT)
+
+
 def fetch_imageinfo(titles: list[str]) -> dict[str, dict]:
-    """Resolve titles to thumbnail URLs plus licence metadata, 40 at a time."""
+    """Resolve titles to thumbnail URLs plus licence and descriptive metadata."""
     out: dict[str, dict] = {}
     for i in range(0, len(titles), 40):
         chunk = titles[i:i + 40]
@@ -360,11 +396,16 @@ def fetch_imageinfo(titles: list[str]) -> dict[str, dict]:
             if not info.get("thumburl"):
                 continue
             meta = info.get("extmetadata", {})
+            description = _clean(meta.get("ImageDescription", {}).get("value", ""))
+            categories = _clean(meta.get("Categories", {}).get("value", ""))
             out[page["title"]] = {
                 "thumburl": info["thumburl"],
                 "descriptionurl": info.get("descriptionurl", ""),
                 "license": meta.get("LicenseShortName", {}).get("value", "unknown"),
-                "artist": re.sub("<[^>]+>", "", meta.get("Artist", {}).get("value", ""))[:200],
+                "artist": _clean(meta.get("Artist", {}).get("value", ""))[:200],
+                "description": description[:400],
+                "categories": categories[:400],
+                "is_specimen": content_is_specimen(description, categories),
             }
     return out
 
@@ -457,11 +498,15 @@ def build_class(rock: str, manifest: dict, relaxed: bool = False) -> int:
     info = fetch_imageinfo(candidates)
 
     saved = have
+    rejected_content = 0
     for title in candidates:
         if saved >= TARGET_PER_CLASS:
             break
         meta = info.get(title)
         if not meta or title in already:
+            continue
+        if not meta["is_specimen"]:
+            rejected_content += 1
             continue
         dest = out_dir / f"{rock.lower()}_{saved:04d}.jpg"
         if download(meta["thumburl"], dest):
@@ -473,7 +518,8 @@ def build_class(rock: str, manifest: dict, relaxed: bool = False) -> int:
             saved += 1
 
     level = logging.WARNING if saved < MIN_PER_CLASS else logging.INFO
-    logger.log(level, f"[{rock}] saved {saved} images")
+    logger.log(level, f"[{rock}] saved {saved} images "
+                     f"({rejected_content} rejected as microscopy/scenery)")
     return saved
 
 

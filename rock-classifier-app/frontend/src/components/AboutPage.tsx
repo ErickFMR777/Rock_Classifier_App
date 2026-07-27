@@ -120,6 +120,17 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
   const confusion: number[][] | null = remoteMetrics?.confusion_matrix ?? null;
   const confusionLabels: string[] = remoteMetrics?.confusion_matrix_labels ?? [];
 
+  const hasLiveReport = Boolean(
+    remoteMetrics?.classification_report &&
+    Object.keys(remoteMetrics.classification_report).length > 0
+  );
+  const topk: Record<string, number> | null = remoteMetrics?.topk_accuracy ?? null;
+  const macroAvg = remoteMetrics?.macro_avg ?? null;
+  const weightedAvg = remoteMetrics?.weighted_avg ?? null;
+  const trainedAt: string | null = remoteMetrics?.trained_at ?? null;
+  const valSamples: number | null = remoteMetrics?.val_samples ?? null;
+  const epochsRun: number | null = remoteMetrics?.epochs_run ?? null;
+
   const countsSorted = datasetCounts
     ? Object.entries(datasetCounts).sort((a, b) => a[1] - b[1])
     : [];
@@ -240,12 +251,27 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
           <span className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-700 text-lg">📊</span>
           Model Performance
         </h3>
+        {/* Provenance: says plainly whether these are live or bundled numbers */}
+        <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          {/* Keyed off the per-class report specifically: a partial metrics.json
+              must not claim the table below is live when it is still bundled. */}
+          <span className={`inline-flex items-center gap-1.5 font-medium ${hasLiveReport ? 'text-emerald-700' : 'text-gray-500'}`}>
+            <span className={`w-2 h-2 rounded-full ${hasLiveReport ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+            {hasLiveReport ? 'Live metrics from the deployed model' : 'Reference metrics bundled at build time'}
+          </span>
+          {trainedAt && <span>Trained {trainedAt.replace('T', ' ')}</span>}
+          {epochsRun !== null && <span>{epochsRun} epochs</span>}
+          {valSamples !== null && <span>Held-out validation: {valSamples} images</span>}
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Overall Accuracy', value: weightedAcc, color: 'from-emerald-500 to-teal-600' },
-            { label: 'Macro Precision', value: avgPrecision, color: 'from-blue-500 to-indigo-600' },
-            { label: 'Macro Recall', value: avgRecall, color: 'from-violet-500 to-purple-600' },
-            { label: 'Macro F1-Score', value: avgF1, color: 'from-amber-500 to-orange-600' },
+            // Prefer the accuracy the training run reported over one re-derived
+            // from the per-class table, which rounds differently.
+            { label: 'Overall Accuracy', value: remoteMetrics?.val_accuracy ?? weightedAcc, color: 'from-emerald-500 to-teal-600' },
+            { label: 'Macro Precision', value: macroAvg?.precision ?? avgPrecision, color: 'from-blue-500 to-indigo-600' },
+            { label: 'Macro Recall', value: macroAvg?.recall ?? avgRecall, color: 'from-violet-500 to-purple-600' },
+            { label: 'Macro F1-Score', value: macroAvg?.f1 ?? avgF1, color: 'from-amber-500 to-orange-600' },
           ].map((m) => (
             <div key={m.label} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm text-center">
               <p className={`text-3xl font-black bg-gradient-to-br ${m.color} bg-clip-text text-transparent`}>
@@ -255,6 +281,75 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
             </div>
           ))}
         </div>
+
+        {/* Top-k: the app shows five candidates, so top-3/top-5 describe the
+            experience far better than top-1 alone. */}
+        {topk && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+            <h4 className="font-bold text-gray-800 text-sm mb-1">Top-k Accuracy</h4>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              How often the correct rock appears among the model's top k guesses. The result screen
+              lists five, so top-5 is what a user can actually act on — top-1 is the strictest read.
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { k: 'top1', label: 'Top-1', note: 'first guess correct' },
+                { k: 'top3', label: 'Top-3', note: 'within first three' },
+                { k: 'top5', label: 'Top-5', note: 'shown on screen' },
+              ].map(({ k, label, note }) =>
+                topk[k] !== undefined ? (
+                  <div key={k} className="text-center">
+                    <p className="text-2xl font-black text-gray-900">{(topk[k] * 100).toFixed(1)}%</p>
+                    <p className="text-xs font-semibold text-gray-500 mt-1">{label}</p>
+                    <p className="text-[11px] text-gray-400">{note}</p>
+                  </div>
+                ) : null
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Macro vs weighted: the gap between them is the imbalance, made visible. */}
+        {macroAvg && weightedAvg && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+            <h4 className="font-bold text-gray-800 text-sm mb-1">Macro vs. Weighted Averages</h4>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              <strong>Macro</strong> averages every class equally, so the thin classes drag it down.{' '}
+              <strong>Weighted</strong> averages by how many validation images each class has, so it
+              reflects the mix a user is likely to meet. A wide gap between the two <em>is</em> the
+              class imbalance showing up in the numbers — quoting only the higher one would flatter
+              the model.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[320px]">
+                <thead>
+                  <tr className="text-xs text-gray-400 uppercase tracking-wider">
+                    <th className="text-left font-semibold pb-2">Metric</th>
+                    <th className="text-right font-semibold pb-2">Macro</th>
+                    <th className="text-right font-semibold pb-2">Weighted</th>
+                    <th className="text-right font-semibold pb-2">Gap</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    ['Precision', macroAvg.precision, weightedAvg.precision],
+                    ['Recall', macroAvg.recall, weightedAvg.recall],
+                    ['F1-Score', macroAvg.f1, weightedAvg.f1],
+                  ] as [string, number, number][]).map(([name, m, w]) => (
+                    <tr key={name} className="border-t border-gray-100">
+                      <td className="py-2 text-gray-700">{name}</td>
+                      <td className="py-2 text-right font-mono text-gray-800">{(m * 100).toFixed(1)}%</td>
+                      <td className="py-2 text-right font-mono text-gray-800">{(w * 100).toFixed(1)}%</td>
+                      <td className={`py-2 text-right font-mono ${w - m > 0.08 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {w - m >= 0 ? '+' : ''}{((w - m) * 100).toFixed(1)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
@@ -507,17 +602,20 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                         {row.map((v, j) => {
                           const frac = rowTotal > 0 ? v / rowTotal : 0;
                           const diag = i === j;
+                          const alpha = 0.15 + frac * 0.75;
                           const bg = v === 0
                             ? 'transparent'
                             : diag
-                              ? `rgba(16,185,129,${0.15 + frac * 0.75})`
-                              : `rgba(239,68,68,${0.15 + frac * 0.75})`;
+                              ? `rgba(16,185,129,${alpha})`
+                              : `rgba(239,68,68,${alpha})`;
+                          // Dark ink is unreadable once the fill saturates.
+                          const ink = v > 0 && alpha > 0.55 ? '#fff' : '#374151';
                           return (
                             <td
                               key={j}
                               title={`True ${confusionLabels[i]} → predicted ${confusionLabels[j]}: ${v}`}
-                              className="w-5 h-5 text-center border border-gray-100 text-gray-700"
-                              style={{ background: bg }}
+                              className="w-5 h-5 text-center border border-gray-100"
+                              style={{ background: bg, color: ink }}
                             >
                               {v || ''}
                             </td>
@@ -567,7 +665,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
             </li>
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Specimen photos, not field photos:</strong> Training images are mostly hand samples on neutral backgrounds. Photos of outcrops, wet rocks or rocks in situ are further from what the model learned and will classify less reliably.</span>
+              <span><strong>Mixed photographic scale:</strong> Most training images are hand samples on neutral backgrounds, but roughly one in six is a field or outcrop shot that survived filtering. The model therefore sees the same rock at very different scales, which blurs what it learns. Close-up photos of a single specimen are what it handles best.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>

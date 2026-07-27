@@ -1,0 +1,28 @@
+{
+  "dataset_counts": {
+    "Andesite": 19,
+    "Basalt": 70,
+    "Breccia": 70,
+    "Chalk": 66,
+    "Conglomerate": 70,
+    "Diorite": 34,
+    "Dolomite": 70,
+    "Dunite": 51,
+    "Flint": 15,
+    "Gneiss": 41,
+    "Granite": 70,
+    "Limestone": 70,
+    "Marble": 49,
+    "Obsidian": 34,
+    "Pegmatite": 70,
+    "Porphyry": 70,
+    "Pumice": 25,
+    "Quartzite": 54,
+    "Rhyolite": 36,
+    "Sandstone": 2
+  },
+  "dataset_total": 986,
+  "dataset_min_class": "Sandstone",
+  "dataset_max_class": "Basalt",
+  "source": "Wikimedia Commons (GeoDIL and institutional specimen photography) - DESCARGA EN CURSO"
+}

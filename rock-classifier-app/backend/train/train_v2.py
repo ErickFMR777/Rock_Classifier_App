@@ -210,6 +210,27 @@ def train_one_epoch_mixup(model, dataloader, criterion, optimizer, device):
     return running_loss / total, correct / total
 
 
+def topk_accuracy(model, dataloader, device, ks=(1, 3, 5)) -> dict:
+    """
+    Top-k accuracy over the validation split. The UI surfaces five candidates,
+    so top-3/top-5 describe what a user actually sees far better than top-1.
+    """
+    model.eval()
+    hits = {k: 0 for k in ks}
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            maxk = min(max(ks), outputs.size(1))
+            _, pred = outputs.topk(maxk, dim=1)
+            correct = pred.eq(labels.view(-1, 1))
+            for k in ks:
+                hits[k] += correct[:, :min(k, maxk)].any(dim=1).sum().item()
+            total += labels.size(0)
+    return {f"top{k}": round(hits[k] / total, 4) for k in ks} if total else {}
+
+
 def validate(model, dataloader, criterion, device):
     """Validate the model."""
     model.eval()
@@ -420,8 +441,28 @@ def main():
                                                             minlength=num_classes))
         }
 
+        topk = topk_accuracy(model, val_loader, device)
+        logger.info(f"Top-k accuracy: {topk}")
+
+        # Macro treats every class equally and so is dragged down by the thin
+        # ones; weighted reflects the mix a user actually meets. Both are
+        # published because reporting only one would be misleading here.
+        macro = report_dict.get("macro avg", {})
+        weighted = report_dict.get("weighted avg", {})
+
         metrics = {
             "classification_report": per_class,
+            "topk_accuracy": topk,
+            "macro_avg": {
+                "precision": round(macro.get("precision", 0), 4),
+                "recall": round(macro.get("recall", 0), 4),
+                "f1": round(macro.get("f1-score", 0), 4),
+            },
+            "weighted_avg": {
+                "precision": round(weighted.get("precision", 0), 4),
+                "recall": round(weighted.get("recall", 0), 4),
+                "f1": round(weighted.get("f1-score", 0), 4),
+            },
             "confusion_matrix": cm,
             "confusion_matrix_labels": class_names,
             "dataset_counts": dataset_counts,
