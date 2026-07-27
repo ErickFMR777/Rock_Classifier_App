@@ -23,11 +23,20 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
-# Models (large files)
+# Models (large files). rock_classifier.pt is deliberately tracked: the
+# Dockerfile copies models/ into the image, so without it the deployed API
+# serves an untrained head. The resume checkpoint stays out — it bundles
+# optimiser state and is ~168 MB.
 models/*.pt
+!models/rock_classifier.pt
+models/checkpoint_last.pt
+models/checkpoint_last.tmp
 
-# Dataset (images)
-dataset/
+# Dataset (images) — regenerate with backend/train/download_commons.py.
+# The manifest is tracked: it records the licence and author of every image,
+# which is what makes the CC-BY attribution obligations auditable.
+dataset/*
+!dataset/MANIFEST.json
 
 # Database
 *.db

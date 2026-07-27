@@ -26,8 +26,19 @@ Thumbs.db
 *.pt
 *.pth
 
-# Dataset
-dataset/
+# The trained model is the exception: the Dockerfile copies models/ into the
+# image, so the weights must be in the repository or the deployed API falls
+# back to an ImageNet backbone with a random head and returns noise.
+!rock-classifier-app/models/rock_classifier.pt
+
+# Resume checkpoint carries optimiser state too (~168 MB). Never commit it.
+rock-classifier-app/models/checkpoint_last.pt
+rock-classifier-app/models/checkpoint_last.tmp
+
+# Dataset images. Excluding the directory itself would make the negation in
+# rock-classifier-app/.gitignore unreachable — git cannot re-include a file
+# inside an excluded directory — so exclude the contents instead.
+dataset/*
 
 # Temp
 *.tmp
