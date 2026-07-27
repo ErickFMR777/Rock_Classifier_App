@@ -1,0 +1,23 @@
+# Never upload these to Vercel — they are large and unused at build/run time.
+# The training dataset alone is ~150 MB of images.
+rock-classifier-app/dataset/
+rock-classifier-app/backend/train/
+rock-classifier-app/backend/data/
+rock-classifier-app/backend/tests/
+rock-classifier-app/backend/venv/
+
+# The PyTorch checkpoint is the training artefact; the deployed function uses
+# the ONNX export in api/_lib/ instead.
+rock-classifier-app/models/rock_classifier.pt
+rock-classifier-app/models/checkpoint_last.pt
+
+# Container deployment files, irrelevant to the Vercel build.
+rock-classifier-app/Dockerfile
+rock-classifier-app/.dockerignore
+render.yaml
+
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+rock-classifier-app/frontend/dist/

@@ -2,47 +2,37 @@ import axios, { AxiosError } from 'axios';
 import { ClassificationResult, RocksListResponse, ModelMetrics } from '../types';
 
 /**
- * Resolves the backend base URL.
+ * Resolves the API base URL.
  *
- * Production (Vercel): `VITE_API_URL` must point at the deployed FastAPI service.
- * PyTorch cannot run on Vercel's serverless functions (the torch wheel alone
- * exceeds the 250 MB limit), so the API is always hosted elsewhere.
+ * Default is the same origin (`/api`): inference ships with the frontend as
+ * Vercel Python functions running onnxruntime, so there is no second service to
+ * point at. In development Vite proxies `/api` to a local uvicorn instead.
  *
- * Development: falls back to `/api`, which Vite proxies to http://localhost:8000.
+ * `VITE_API_URL` remains supported as an override for pointing at a separately
+ * hosted FastAPI backend; both `https://host` and `https://host/api` are accepted.
  */
-function resolveApiBase(): string | null {
+function resolveApiBase(): string {
   const raw = import.meta.env.VITE_API_URL?.trim();
+  if (!raw) return '/api';
 
-  if (raw) {
-    // Accept both `https://host` and `https://host/api` — every backend route
-    // is mounted under `/api`, so normalise to exactly one `/api` suffix.
-    const withoutTrailingSlash = raw.replace(/\/+$/, '');
-    return withoutTrailingSlash.endsWith('/api')
-      ? withoutTrailingSlash
-      : `${withoutTrailingSlash}/api`;
-  }
-
-  return import.meta.env.DEV ? '/api' : null;
+  const withoutTrailingSlash = raw.replace(/\/+$/, '');
+  return withoutTrailingSlash.endsWith('/api')
+    ? withoutTrailingSlash
+    : `${withoutTrailingSlash}/api`;
 }
 
 export const API_BASE = resolveApiBase();
 
-/** False on a Vercel deploy where VITE_API_URL was never set. */
-export const isApiConfigured = API_BASE !== null;
+/**
+ * The API is always reachable now that it is same-origin. Kept as a named
+ * export so callers read intent rather than a bare `true`.
+ */
+export const isApiConfigured = true;
 
 const client = axios.create({
-  baseURL: API_BASE ?? undefined,
+  baseURL: API_BASE,
   timeout: 60000,
 });
-
-class ApiNotConfiguredError extends Error {
-  constructor() {
-    super(
-      'The classification backend is not configured. Set VITE_API_URL to your deployed FastAPI service and redeploy.'
-    );
-    this.name = 'ApiNotConfiguredError';
-  }
-}
 
 /** Turns axios failures into messages that are useful to a user, not a stack trace. */
 function toFriendlyError(err: unknown): Error {
@@ -77,10 +67,6 @@ function toFriendlyError(err: unknown): Error {
  * Matches the backend contract: POST /api/classify/rock -> ClassificationResponse.
  */
 export async function classifyRock(file: File): Promise<ClassificationResult> {
-  if (!isApiConfigured) {
-    throw new ApiNotConfiguredError();
-  }
-
   const formData = new FormData();
   formData.append('file', file);
 
@@ -107,8 +93,6 @@ export async function getRockDetails(rockName: string) {
  * to the metrics bundled at build time when this is unavailable.
  */
 export async function getModelMetrics(): Promise<ModelMetrics | null> {
-  if (!isApiConfigured) return null;
-
   try {
     const response = await client.get<ModelMetrics>('/model/metrics');
     return response.data;

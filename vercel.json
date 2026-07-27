@@ -4,7 +4,16 @@
   "buildCommand": "npm run build --prefix rock-classifier-app/frontend",
   "outputDirectory": "rock-classifier-app/frontend/dist",
   "framework": null,
+  "functions": {
+    "api/classify/rock.py": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "api/_lib/**"
+    },
+    "api/reference/rocks.py": { "includeFiles": "api/_lib/**" },
+    "api/model/metrics.py": { "includeFiles": "api/_lib/**" }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

@@ -1,0 +1,11 @@
+# Dependencies for the Vercel Python serverless functions under api/.
+#
+# Deliberately NOT torch: its wheel alone exceeds Vercel's 250 MB function
+# limit. onnxruntime runs the exported graph in roughly 146 MB with these.
+#
+# The Vercel Python runtime is CPython 3.12, and onnxruntime only publishes
+# cp312 manylinux wheels from 1.24 onwards — an older pin fails to resolve at
+# build time. 1.28.0 is also the version the ONNX export was verified against.
+onnxruntime==1.28.0
+numpy>=1.26,<3
+pillow>=10.4,<12

@@ -43,3 +43,5 @@ dataset/*
 # Temp
 *.tmp
 *.db
+.vercel
+.env*

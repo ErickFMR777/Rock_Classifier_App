@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { isApiConfigured } from '../api/client';
+import { healthCheck } from '../api/client';
 
 export type Page = 'classifier' | 'catalog' | 'about';
 
@@ -40,6 +40,19 @@ const navItems: { key: Page; label: string; icon: JSX.Element }[] = [
 ];
 
 export const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
+  // Probe the API rather than hardcoding "AI Online": the badge should reflect
+  // whether inference is actually reachable, not just that the page loaded.
+  const [apiUp, setApiUp] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    healthCheck()
+      .then(() => !cancelled && setApiUp(true))
+      .catch(() => !cancelled && setApiUp(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <nav className="sticky top-0 z-50 backdrop-blur-xl bg-white/70 border-b border-gray-200/50 shadow-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -85,10 +98,14 @@ export const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChang
           <div className="hidden md:flex items-center gap-2 text-xs font-medium text-gray-500">
             <span
               className={`w-2 h-2 rounded-full ${
-                isApiConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'
+                apiUp === null
+                  ? 'bg-gray-300'
+                  : apiUp
+                    ? 'bg-emerald-500 animate-pulse'
+                    : 'bg-red-400'
               }`}
             ></span>
-            {isApiConfigured ? 'AI Online' : 'AI Offline'}
+            {apiUp === null ? 'Checking…' : apiUp ? 'AI Online' : 'AI Offline'}
           </div>
         </div>
       </div>
