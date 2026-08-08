@@ -54,6 +54,20 @@ automatically.
 
 ## Things that will bite you
 
+**Three copies of the val transform must agree**, and equivalence of the *weights*
+does not imply equivalence of the *pipeline*. `train_v2.py`'s `val_transform`,
+`RockClassifier.transform`, and `preprocess()` in `api/classify/rock.py` all have
+to be `Resize(256) + CenterCrop(224)` — the transform the 40.6 % was measured on.
+The numpy/PIL reimplementation in `rock.py` is the delicate one: torchvision
+`Resize(int)` **truncates** the long side (`int(256 * long / short)`, and `w <= h`
+means `w` is the short side), while `CenterCrop` offsets by `int(round(margin/2))`,
+**not** `margin // 2`. Using `round()` for the resize or `//` for the crop shifts
+the crop by 1 px on roughly half of real images and moves confidences by up to
+0.15 without changing the predicted class — invisible to a spot check, and enough
+to make the hold-out metrics irreproducible. To verify a change here, compare
+`preprocess()` against the torchvision pipeline directly: it should be **bit
+identical** (max diff exactly 0.0), not merely close.
+
 **Vercel project settings live outside the repo** and caused 14 hours of failing
 builds. `rootDirectory` must be empty (it was `rock-classifier-app/backend`, which
 made the install command resolve to a duplicated non-existent path), `framework`
