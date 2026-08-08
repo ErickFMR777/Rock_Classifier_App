@@ -86,12 +86,23 @@ def preprocess(raw: bytes) -> np.ndarray:
     img.verify()
     img = Image.open(io.BytesIO(raw)).convert("RGB")
 
+    # torchvision's Resize(int) truncates the long side, it does not round —
+    # round() made 23 of 50 sample images 1 px larger, shifting the crop and
+    # moving confidences by up to 0.147 against the transform the model was
+    # validated on. Same tie-break as torchvision: w <= h means w is the short
+    # side.
     w, h = img.size
-    scale = 256 / min(w, h)
-    img = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.BILINEAR)
+    if w <= h:
+        new_w, new_h = 256, int(256 * h / w)
+    else:
+        new_w, new_h = int(256 * w / h), 256
+    if (new_w, new_h) != (w, h):
+        img = img.resize((new_w, new_h), Image.BILINEAR)
 
+    # CenterCrop uses int(round(...)), not floor division: on an odd margin
+    # `//` lands 1 px off-centre from what the model was validated on.
     w, h = img.size
-    left, top = (w - 224) // 2, (h - 224) // 2
+    left, top = int(round((w - 224) / 2.0)), int(round((h - 224) / 2.0))
     img = img.crop((left, top, left + 224, top + 224))
 
     arr = np.asarray(img, dtype=np.float32).transpose(2, 0, 1) / 255.0
