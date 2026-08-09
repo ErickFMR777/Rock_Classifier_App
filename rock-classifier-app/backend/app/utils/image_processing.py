@@ -9,7 +9,7 @@ import tempfile
 import logging
 from PIL import Image
 
-from ..config import IMAGE_MAX_SIZE, ALLOWED_EXTENSIONS, IMAGE_SIZE
+from ..config import IMAGE_MAX_SIZE, ALLOWED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,3 @@ async def validate_image(file: UploadFile) -> str:
 
     logger.info(f"Image validated and saved: {tmp_path}")
     return tmp_path
-
-
-def resize_image(image_path: str, size: int = IMAGE_SIZE) -> Image.Image:
-    """Resize image to standard size."""
-    img = Image.open(image_path).convert("RGB")
-    img = img.resize((size, size), Image.Resampling.LANCZOS)
-    return img

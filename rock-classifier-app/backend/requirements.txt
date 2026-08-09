@@ -2,6 +2,9 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
+# Never imported by name, but FastAPI needs it to parse `UploadFile`/`File()`.
+# Dropping it as "unused" breaks POST /api/classify/rock at request time, not
+# at import time, so nothing here would catch it.
 python-multipart==0.0.6
 
 # Deep Learning & Image Processing
@@ -12,14 +15,10 @@ torchvision==0.28.0
 Pillow==10.1.0
 numpy>=2.0,<3
 
-# Database
-SQLAlchemy==2.0.23
-
 # Utilities
 python-dotenv==1.0.0
-aiofiles==23.2.1
-typing-extensions==4.8.0
 
-# Development & Testing
+# Development & Testing. `tests/` holds no test suite yet; these are kept so
+# writing one does not start with a dependency hunt.
 pytest==7.4.3
 pytest-asyncio==0.21.1

@@ -12,14 +12,7 @@ load_dotenv()
 
 # ==================== DIRECTORIES ====================
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
 MODELS_DIR = Path(os.getenv("MODELS_DIR", str(BASE_DIR.parent / "models")))
-
-# Create directories if they don't exist
-DATA_DIR.mkdir(exist_ok=True)
-
-# ==================== DATABASE ====================
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/database.db")
 
 # ==================== API CONFIGURATION ====================
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
@@ -33,17 +26,16 @@ ROCK_MODEL_PATH = MODELS_DIR / "rock_classifier.pt"
 ROCK_CLASSES_PATH = MODELS_DIR / "rock_classes.json"
 
 # Model parameters
-IMAGE_SIZE = 224  # ResNet50 expects 224x224
-MODEL_DEVICE = "cpu"  # Codespaces CPU only
+IMAGE_SIZE = 224  # the network's input resolution, after Resize(256)+CenterCrop
+MODEL_DEVICE = "cpu"
 
 # ==================== IMAGE PROCESSING ====================
 IMAGE_MAX_SIZE = 5 * 1024 * 1024  # 5MB max file size
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
-# Image normalization (ImageNet stats)
-IMAGE_NORMALIZE_MEAN = [0.485, 0.456, 0.406]
-IMAGE_NORMALIZE_STD = [0.229, 0.224, 0.225]
-
+# The ImageNet normalisation constants deliberately do NOT live here: the val
+# transform is defined once in RockClassifier.transform, and a second copy of
+# the numbers invites the two from drifting apart.
 
 # ==================== CORS SETTINGS ====================
 ALLOWED_ORIGINS = [
@@ -81,9 +73,6 @@ ALLOWED_ORIGINS = list(dict.fromkeys(ALLOWED_ORIGINS))
 ALLOWED_ORIGIN_REGEX = os.getenv(
     "VERCEL_PREVIEW_REGEX", r"^https://.*\.vercel\.app$"
 ) or None
-
-# ==================== CACHE SETTINGS ====================
-CACHE_MAX_AGE = 86400  # 24 hours
 
 # ==================== LOGGING ====================
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

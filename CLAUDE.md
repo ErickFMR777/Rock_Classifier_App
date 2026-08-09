@@ -118,10 +118,23 @@ thin section identically to a hand sample — only the description and categorie
 distinguish them.
 
 **About page metrics.** `AboutPage.tsx` ships hardcoded per-class metrics as a
-fallback and overrides them from `GET /api/model/metrics`. Four sections (dataset
-balance, confusion matrix, top-k, macro-vs-weighted) render only when the
-corresponding field is present, and hide themselves otherwise.
+fallback and overrides them from `GET /api/model/metrics`. The fallback mirrors
+`api/_lib/metrics.json`, so the offline view cannot report a different training
+run than the online one — regenerate it from that file after retraining. Four
+sections (dataset balance, confusion matrix, top-k, macro-vs-weighted) render
+only when the corresponding field is present, and hide themselves otherwise.
 
-**`backend/app/database/` is dead code.** `connection.py`, `crud.py` and
-`models/database.py` define a SQLAlchemy layer nothing imports; no tables are
-created and no `.db` file exists.
+**`python-multipart` looks unused and is not.** It is never imported by name,
+but FastAPI needs it to parse `UploadFile`/`File()`. Dropping it from
+`backend/requirements.txt` breaks `POST /api/classify/rock` at request time, not
+at import time, so neither a linter nor a startup check catches it. The
+SQLAlchemy layer that used to sit in `backend/app/database/` was genuinely dead
+and has been removed, along with `resize_image()` (which squashed to 224×224 and
+so contradicted the val transform above).
+
+**The API answers in English.** `detail` strings from `api/` are not localised,
+and neither is the axios failure mode. `api/client.ts` therefore classifies
+failures into an `ApiErrorKind` and the component picks the wording, since only
+it knows the active locale — never render `err.message` to a user. `ui.errors`
+is typed `Record<ApiErrorKind, Localized<string>>`, so a new kind without a
+translation fails the build.

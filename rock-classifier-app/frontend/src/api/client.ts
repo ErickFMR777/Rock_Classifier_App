@@ -21,13 +21,7 @@ function resolveApiBase(): string {
     : `${withoutTrailingSlash}/api`;
 }
 
-export const API_BASE = resolveApiBase();
-
-/**
- * The API is always reachable now that it is same-origin. Kept as a named
- * export so callers read intent rather than a bare `true`.
- */
-export const isApiConfigured = true;
+const API_BASE = resolveApiBase();
 
 const client = axios.create({
   baseURL: API_BASE,
