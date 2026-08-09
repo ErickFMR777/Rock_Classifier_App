@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { ClassificationResult, RocksListResponse, ModelMetrics } from '../types';
 
 /**
@@ -34,32 +34,71 @@ const client = axios.create({
   timeout: 60000,
 });
 
-/** Turns axios failures into messages that are useful to a user, not a stack trace. */
-function toFriendlyError(err: unknown): Error {
-  if (!(err instanceof AxiosError)) {
-    return err instanceof Error ? err : new Error('Unexpected error during classification.');
+/**
+ * What went wrong, as a stable identifier rather than a sentence.
+ *
+ * The API answers in English (its `detail` strings are not localised), and this
+ * module cannot call a React hook to translate. So failures are classified here
+ * and the wording is chosen by the component that renders them, which does know
+ * the active locale.
+ */
+export type ApiErrorKind =
+  | 'timeout'
+  | 'network'
+  | 'rateLimit'
+  | 'tooLarge'
+  | 'badType'
+  | 'badImage'
+  | 'noFile'
+  | 'server'
+  | 'unexpected';
+
+export class ApiError extends Error {
+  readonly kind: ApiErrorKind;
+  /** Raw English `detail` from the API, kept for logs — not for display. */
+  readonly detail?: string;
+  readonly status?: number;
+
+  constructor(kind: ApiErrorKind, detail?: string, status?: number) {
+    super(detail ?? kind);
+    this.name = 'ApiError';
+    this.kind = kind;
+    this.detail = detail;
+    this.status = status;
+  }
+}
+
+/**
+ * Classifies an axios failure into an {@link ApiErrorKind}.
+ *
+ * Uses `axios.isAxiosError` rather than `instanceof AxiosError`: `instanceof`
+ * silently fails when two copies of axios end up in the bundle, and the whole
+ * mapping below would then collapse to 'unexpected'.
+ */
+function toApiError(err: unknown): ApiError {
+  if (!axios.isAxiosError(err)) {
+    return new ApiError('unexpected', err instanceof Error ? err.message : undefined);
   }
 
-  if (err.code === 'ECONNABORTED') {
-    return new Error('The request timed out. The backend may be waking up from sleep — try again in a moment.');
-  }
-
-  if (!err.response) {
-    return new Error('Could not reach the classification backend. Check that it is running and that CORS allows this domain.');
-  }
+  if (err.code === 'ECONNABORTED') return new ApiError('timeout');
+  if (!err.response) return new ApiError('network');
 
   const { status, data } = err.response;
-  const detail = typeof data === 'object' && data !== null ? (data as { detail?: unknown }).detail : undefined;
+  const raw = typeof data === 'object' && data !== null ? (data as { detail?: unknown }).detail : undefined;
+  const detail = typeof raw === 'string' ? raw : undefined;
 
-  if (typeof detail === 'string' && detail.length > 0) {
-    return new Error(detail);
+  if (status === 429) return new ApiError('rateLimit', detail, status);
+  if (status === 413) return new ApiError('tooLarge', detail, status);
+
+  if (status === 400 && detail) {
+    if (detail.includes('Invalid file type')) return new ApiError('badType', detail, status);
+    if (detail.includes('Invalid image')) return new ApiError('badImage', detail, status);
+    if (detail.includes('No file uploaded') || detail.includes('Empty request body')) {
+      return new ApiError('noFile', detail, status);
+    }
   }
 
-  if (status === 429) {
-    return new Error('Rate limit reached (30 requests/minute). Please wait a moment and try again.');
-  }
-
-  return new Error(`Classification failed with status ${status}.`);
+  return new ApiError('server', detail, status);
 }
 
 /**
@@ -74,17 +113,12 @@ export async function classifyRock(file: File): Promise<ClassificationResult> {
     const response = await client.post<ClassificationResult>('/classify/rock', formData);
     return response.data;
   } catch (err) {
-    throw toFriendlyError(err);
+    throw toApiError(err);
   }
 }
 
 export async function getRocks(): Promise<RocksListResponse> {
   const response = await client.get<RocksListResponse>('/reference/rocks');
-  return response.data;
-}
-
-export async function getRockDetails(rockName: string) {
-  const response = await client.get(`/reference/rocks/${encodeURIComponent(rockName)}`);
   return response.data;
 }
 

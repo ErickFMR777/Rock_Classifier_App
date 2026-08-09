@@ -18,7 +18,10 @@ const getConfidenceColor = (c: number) => {
 export const ClassificationResult: React.FC<Props> = ({ result }) => {
   const { locale, t } = useLocale();
   const { percent } = useFormatters();
-  const { primary, alternatives, inference_time_ms } = result;
+  // Defaulted rather than destructured bare: a malformed response would
+  // otherwise throw here and blank the whole page instead of the one card.
+  const { primary, inference_time_ms } = result;
+  const alternatives = result.alternatives ?? [];
   const confColor = getConfidenceColor(primary.confidence);
 
   const confidenceLabel =

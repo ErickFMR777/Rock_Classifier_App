@@ -13,6 +13,7 @@
 
 import type { Localized, Locale } from '../lib/i18n'
 import type { RockCategory } from './rocks'
+import type { ApiErrorKind } from '../api/client'
 
 export const ui = {
   brand: 'RockClassifier',
@@ -56,7 +57,52 @@ export const ui = {
     statMatches: { es: 'Coincidencias', en: 'Matches' } satisfies Localized<string>,
 
     errorTitle: { es: 'Error de clasificación', en: 'Classification Error' } satisfies Localized<string>,
-    errorGeneric: { es: 'Falló la clasificación.', en: 'Classification failed.' } satisfies Localized<string>,
+
+    /**
+     * One entry per `ApiErrorKind`. The API's own `detail` strings are English
+     * and are deliberately not shown: the request is classified in the client
+     * and the wording is picked here, so a Spanish user never sees an English
+     * error. Keyed by the union type, so adding a kind without translating it
+     * is a build error.
+     */
+    errors: {
+      timeout: {
+        es: 'La solicitud tardó demasiado. Inténtalo de nuevo en un momento.',
+        en: 'The request timed out. Please try again in a moment.',
+      },
+      network: {
+        es: 'No se pudo conectar con el servicio de clasificación. Revisa tu conexión e inténtalo de nuevo.',
+        en: 'Could not reach the classification service. Check your connection and try again.',
+      },
+      rateLimit: {
+        es: 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.',
+        en: 'Too many requests. Please wait a moment and try again.',
+      },
+      tooLarge: {
+        es: 'La imagen supera el máximo de 5 MB. Prueba con una más pequeña.',
+        en: 'The image is over the 5 MB limit. Try a smaller one.',
+      },
+      badType: {
+        es: 'Formato no admitido. Usa JPG, PNG o WebP.',
+        en: 'Unsupported format. Use JPG, PNG or WebP.',
+      },
+      badImage: {
+        es: 'No se pudo leer la imagen. Puede estar dañada o incompleta.',
+        en: 'The image could not be read. It may be corrupted or incomplete.',
+      },
+      noFile: {
+        es: 'No se recibió ninguna imagen. Selecciona un archivo e inténtalo de nuevo.',
+        en: 'No image was received. Pick a file and try again.',
+      },
+      server: {
+        es: 'El servicio de clasificación falló. Inténtalo de nuevo en un momento.',
+        en: 'The classification service failed. Please try again in a moment.',
+      },
+      unexpected: {
+        es: 'Ocurrió un error inesperado durante la clasificación.',
+        en: 'An unexpected error occurred during classification.',
+      },
+    } satisfies Record<ApiErrorKind, Localized<string>>,
 
     /**
      * Accuracy caveat shown next to every result. It was already in the app —

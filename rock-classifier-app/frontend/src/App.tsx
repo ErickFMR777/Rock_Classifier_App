@@ -6,7 +6,7 @@ import { ClassificationResult } from './components/ClassificationResult'
 import { LoadingSpinner } from './components/LoadingSpinner'
 import { RockCatalog } from './components/RockCatalog'
 import { AboutPage } from './components/AboutPage'
-import { classifyRock } from './api/client'
+import { ApiError, type ApiErrorKind, classifyRock } from './api/client'
 import { ClassificationResult as ClassificationResultData } from './types'
 import { useLocale } from './lib/i18n'
 import { ui } from './data/ui'
@@ -18,7 +18,10 @@ function App() {
   const [image, setImage] = useState<File | null>(null)
   const [result, setResult] = useState<ClassificationResultData | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // The kind, not the sentence: holding the text would freeze the message in
+  // whichever language was active when the request failed, so switching locale
+  // afterwards would leave a stale error on screen.
+  const [error, setError] = useState<ApiErrorKind | null>(null)
 
   const handleImageSelected = (file: File) => {
     setImage(file)
@@ -34,7 +37,7 @@ function App() {
       const response = await classifyRock(image)
       setResult(response)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t(ui.classifier.errorGeneric))
+      setError(err instanceof ApiError ? err.kind : 'unexpected')
     } finally {
       setLoading(false)
     }
@@ -127,7 +130,7 @@ function App() {
                       </svg>
                       <div>
                         <p className="font-semibold text-red-800 text-sm">{t(ui.classifier.errorTitle)}</p>
-                        <p className="text-red-700 text-sm mt-0.5">{error}</p>
+                        <p className="text-red-700 text-sm mt-0.5">{t(ui.classifier.errors[error])}</p>
                       </div>
                     </div>
                   )}
