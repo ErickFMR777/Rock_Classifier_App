@@ -188,7 +188,7 @@ export const ClassificationResult: React.FC<Props> = ({ result }) => {
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
           {inference_time_ms}ms
         </span>
-        <span>ResNet50</span>
+        <span>ResNet18</span>
         <span>{t(ui.result.topPredictions)}</span>
       </div>
     </motion.div>
