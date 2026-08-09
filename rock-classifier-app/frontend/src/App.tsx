@@ -8,9 +8,12 @@ import { RockCatalog } from './components/RockCatalog'
 import { AboutPage } from './components/AboutPage'
 import { classifyRock } from './api/client'
 import { ClassificationResult as ClassificationResultData } from './types'
+import { useLocale } from './lib/i18n'
+import { ui } from './data/ui'
 import './styles/globals.css'
 
 function App() {
+  const { t } = useLocale()
   const [page, setPage] = useState<Page>('classifier')
   const [image, setImage] = useState<File | null>(null)
   const [result, setResult] = useState<ClassificationResultData | null>(null)
@@ -31,7 +34,7 @@ function App() {
       const response = await classifyRock(image)
       setResult(response)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Classification failed.')
+      setError(err instanceof Error ? err.message : t(ui.classifier.errorGeneric))
     } finally {
       setLoading(false)
     }
@@ -55,10 +58,12 @@ function App() {
               {/* Hero */}
               <div className="text-center mb-10">
                 <h1 className="text-4xl sm:text-5xl font-black text-gray-900 tracking-tight mb-3">
-                  Rock Identifier
+                  {t(ui.classifier.title)}
                 </h1>
                 <p className="text-lg text-gray-500 max-w-xl mx-auto">
-                  Upload a photo and our AI will classify it among our catalog of <span className="font-semibold text-gray-700">25 rock types</span> in seconds.
+                  {t(ui.classifier.subtitleBefore)}
+                  <span className="font-semibold text-gray-700">{t(ui.classifier.subtitleHighlight)}</span>
+                  {t(ui.classifier.subtitleAfter)}
                 </p>
               </div>
 
@@ -81,9 +86,9 @@ function App() {
                         {loading ? (
                           <span className="flex items-center justify-center gap-2">
                             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                            Classifying...
+                            {t(ui.classifier.classifying)}
                           </span>
-                        ) : 'Classify Rock'}
+                        ) : t(ui.classifier.classify)}
                       </button>
                     )}
                   </div>
@@ -93,15 +98,15 @@ function App() {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-white rounded-xl p-4 text-center border border-gray-100 shadow-sm">
                         <p className="text-2xl font-black text-amber-600">25</p>
-                        <p className="text-xs text-gray-500 font-medium mt-0.5">Rock Types</p>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">{t(ui.classifier.statTypes)}</p>
                       </div>
                       <div className="bg-white rounded-xl p-4 text-center border border-gray-100 shadow-sm">
                         <p className="text-2xl font-black text-amber-600">&lt;2s</p>
-                        <p className="text-xs text-gray-500 font-medium mt-0.5">Response</p>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">{t(ui.classifier.statResponse)}</p>
                       </div>
                       <div className="bg-white rounded-xl p-4 text-center border border-gray-100 shadow-sm">
                         <p className="text-2xl font-black text-amber-600">Top 5</p>
-                        <p className="text-xs text-gray-500 font-medium mt-0.5">Matches</p>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">{t(ui.classifier.statMatches)}</p>
                       </div>
                     </div>
                   )}
@@ -121,7 +126,7 @@ function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div>
-                        <p className="font-semibold text-red-800 text-sm">Classification Error</p>
+                        <p className="font-semibold text-red-800 text-sm">{t(ui.classifier.errorTitle)}</p>
                         <p className="text-red-700 text-sm mt-0.5">{error}</p>
                       </div>
                     </div>
@@ -134,9 +139,7 @@ function App() {
                       {/* Model transparency notice */}
                       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-amber-700 text-sm flex items-start gap-2">
                         <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>
-                          ⚠️ La precisión del modelo depende de la cantidad de datos disponibles para cada tipo de roca. Algunas clases tienen menos imágenes de entrenamiento, lo que puede reducir la exactitud de la predicción. Aumentar la cantidad de imágenes por clase mejorará el rendimiento del modelo con el tiempo.
-                        </span>
+                        <span>⚠️ {t(ui.classifier.accuracyNotice)}</span>
                       </div>
                     </div>
                   )}
@@ -150,21 +153,16 @@ function App() {
                           </svg>
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-gray-900 mb-2">Ready to Classify</h3>
+                          <h3 className="text-lg font-bold text-gray-900 mb-2">{t(ui.classifier.readyTitle)}</h3>
                           <p className="text-gray-500 text-sm leading-relaxed max-w-sm mx-auto">
-                            Upload a rock photo to get started. You'll receive a detailed classification with geological information.
+                            {t(ui.classifier.readyBody)}
                           </p>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-md mx-auto">
-                          {[
-                            { icon: '🎯', text: 'Classification with confidence percentage' },
-                            { icon: '🪨', text: 'Geological type and formation info' },
-                            { icon: '🔬', text: 'Mineral composition details' },
-                            { icon: '📊', text: 'Top 5 alternative matches' },
-                          ].map((item, i) => (
+                          {t(ui.classifier.readyBullets).map((text, i) => (
                             <div key={i} className="flex items-center gap-2.5 text-sm text-gray-600">
-                              <span className="text-base">{item.icon}</span>
-                              <span>{item.text}</span>
+                              <span className="text-base">{['🎯', '🪨', '🔬', '📊'][i]}</span>
+                              <span>{text}</span>
                             </div>
                           ))}
                         </div>
@@ -207,8 +205,8 @@ function App() {
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white/50 backdrop-blur-sm mt-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
-          <span>RockClassifier.ai — Powered by ResNet50 + PyTorch</span>
-          <span>React + FastAPI + Deep Learning</span>
+          <span>{t(ui.classifier.footerLeft)}</span>
+          <span>{t(ui.classifier.footerRight)}</span>
         </div>
       </footer>
     </div>

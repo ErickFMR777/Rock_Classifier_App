@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { getModelMetrics } from '../api/client';
+import { RichText, useFormatters, useLocale } from '../lib/i18n';
+import { ui } from '../data/ui';
+import { rockLabel } from '../data/rocks';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -8,40 +11,20 @@ const fadeUp = {
   transition: { duration: 0.5 },
 };
 
-const specs = [
-  { label: 'Architecture', value: 'ResNet18', detail: '18-layer deep residual network' },
-  { label: 'Pre-trained On', value: 'ImageNet', detail: '1.2M images, 1000 classes' },
-  { label: 'Approach', value: 'Transfer Learning', detail: 'Fine-tuned layers 3, 4 + FC head' },
-  { label: 'Input Size', value: '224 × 224 px', detail: 'RGB images auto-resized' },
-  { label: 'Output Classes', value: '25 Rock Types', detail: 'Igneous, sedimentary, metamorphic' },
-  { label: 'Inference', value: '< 2 seconds', detail: 'CPU inference (no GPU required)' },
-];
-
-const trainingDetails = [
-  { label: 'Dataset', value: '816 images', detail: '~30-80 per class, web-scraped' },
-  { label: 'Epochs', value: '30', detail: 'Cosine Annealing w/ Warm Restarts' },
-  { label: 'Batch Size', value: '8', detail: 'With 3× oversampling per epoch' },
-  { label: 'Optimizer', value: 'AdamW', detail: 'Differential LRs: backbone 1e-4, FC 1e-3' },
-  { label: 'Regularization', value: 'Multi-strategy', detail: 'Dropout 0.4, Label Smooth 0.1, Mixup' },
-  { label: 'Train Time', value: '~125 min', detail: 'CPU-only (GitHub Codespaces)' },
-];
-
-const techStack = [
-  { name: 'React 18', role: 'Frontend UI', icon: '⚛️' },
-  { name: 'TypeScript', role: 'Type safety', icon: '🔷' },
-  { name: 'Tailwind CSS', role: 'Styling', icon: '🎨' },
-  { name: 'Framer Motion', role: 'Animations', icon: '🎬' },
-  { name: 'FastAPI', role: 'Backend API', icon: '⚡' },
-  { name: 'PyTorch', role: 'Deep Learning', icon: '🔥' },
-  { name: 'TorchVision', role: 'Image Models', icon: '👁️' },
-  { name: 'Pillow', role: 'Image Processing', icon: '🖼️' },
-];
-
-const steps = [
-  { step: '01', title: 'Upload', description: 'Drag and drop or click to upload a rock photo (JPG, PNG, WebP up to 5 MB).' },
-  { step: '02', title: 'Process', description: 'The image is resized to 224×224 and normalized using ImageNet statistics.' },
-  { step: '03', title: 'Classify', description: 'ResNet18 extracts features and predicts probabilities for each of the 25 rock types.' },
-  { step: '04', title: 'Results', description: 'You receive the top match with confidence score, geological info, and 4 alternative matches.' },
+/**
+ * Names and icons are locale-independent; the role text comes from `ui`.
+ * Typing `name` as a key of `techRoles` makes an unlisted tool a build error
+ * rather than a blank line under the icon.
+ */
+const techStack: { name: keyof typeof ui.about.techRoles.en; icon: string }[] = [
+  { name: 'React 18', icon: '⚛️' },
+  { name: 'TypeScript', icon: '🔷' },
+  { name: 'Tailwind CSS', icon: '🎨' },
+  { name: 'Framer Motion', icon: '🎬' },
+  { name: 'FastAPI', icon: '⚡' },
+  { name: 'PyTorch', icon: '🔥' },
+  { name: 'TorchVision', icon: '👁️' },
+  { name: 'Pillow', icon: '🖼️' },
 ];
 
 // Real per-class metrics from training (val set, 163 samples)
@@ -96,6 +79,8 @@ interface AboutPageProps {
 }
 
 export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
+  const { locale, t } = useLocale();
+  const { percent, date } = useFormatters();
   const [metricSort, setMetricSort] = useState<'name' | 'f1' | 'recall'>('f1');
   const [metricFilter, setMetricFilter] = useState<'all' | 'igneous' | 'sedimentary' | 'metamorphic'>('all');
   const [remoteMetrics, setRemoteMetrics] = useState<any | null>(null);
@@ -141,7 +126,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
   const sorted = [...displayedClassMetrics]
     .filter((m) => metricFilter === 'all' || m.category === metricFilter)
     .sort((a, b) => {
-      if (metricSort === 'name') return a.name.localeCompare(b.name);
+      if (metricSort === 'name')
+        return rockLabel(a.name, locale).localeCompare(rockLabel(b.name, locale), locale);
       if (metricSort === 'f1') return b.f1 - a.f1;
       return b.recall - a.recall;
     });
@@ -173,11 +159,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       {/* Hero */}
       <motion.div {...fadeUp} className="text-center">
         <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-4">
-          About RockClassifier<span className="text-amber-600">.ai</span>
+          {t(ui.about.titleBefore)}<span className="text-amber-600">{ui.brandSuffix}</span>
         </h2>
         <p className="text-gray-600 max-w-2xl mx-auto text-lg leading-relaxed">
-          An AI-powered tool that identifies rocks from photographs using deep learning.
-          Built for geology students, field researchers, rock collectors, and anyone curious about the earth beneath their feet.
+          {t(ui.about.intro)}
         </p>
       </motion.div>
 
@@ -185,13 +170,13 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.1 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-amber-700 text-sm font-black">?</span>
-          How It Works
+          {t(ui.about.howItWorks)}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {steps.map((s) => (
-            <div key={s.step} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+          {t(ui.about.steps).map((s, i) => (
+            <div key={s.title} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
               <span className="text-3xl font-black bg-gradient-to-br from-amber-500 to-orange-600 bg-clip-text text-transparent">
-                {s.step}
+                {String(i + 1).padStart(2, '0')}
               </span>
               <h4 className="font-bold text-gray-900 mt-3 mb-2">{s.title}</h4>
               <p className="text-sm text-gray-600 leading-relaxed">{s.description}</p>
@@ -204,11 +189,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.2 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center text-violet-700 text-sm font-black">AI</span>
-          Model Specifications
+          {t(ui.about.specsTitle)}
         </h3>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
-            {specs.map((spec) => (
+            {t(ui.about.specs).map((spec) => (
               <div key={spec.label} className="p-5 hover:bg-gray-50/60 transition-colors">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{spec.label}</p>
                 <p className="text-lg font-bold text-gray-900">{spec.value}</p>
@@ -223,11 +208,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.22 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-700 text-lg">🏋️</span>
-          Training Configuration
+          {t(ui.about.trainingTitle)}
         </h3>
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
-            {trainingDetails.map((td) => (
+            {t(ui.about.training).map((td) => (
               <div key={td.label} className="p-5 hover:bg-gray-50/60 transition-colors">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{td.label}</p>
                 <p className="text-lg font-bold text-gray-900">{td.value}</p>
@@ -238,9 +223,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
         </div>
         <div className="mt-3 bg-gray-50 rounded-xl p-4 border border-gray-100">
           <p className="text-xs text-gray-500 leading-relaxed">
-            <strong className="text-gray-700">Techniques used:</strong> Transfer Learning (ImageNet → Rocks), Mixup Data Augmentation (α=0.2),
-            Label Smoothing (0.1), Weighted Random Sampling for class balance, Cosine Annealing with Warm Restarts (T₀=10),
-            Gradient Clipping (1.0), heavy geometric + color augmentations (rotation, affine, color jitter, Gaussian blur, random erasing).
+            <strong className="text-gray-700">{t(ui.about.techniquesLabel)}</strong>
+            {t(ui.about.techniquesBody)}
           </p>
         </div>
       </motion.div>
@@ -249,7 +233,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.25 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-700 text-lg">📊</span>
-          Model Performance
+          {t(ui.about.performanceTitle)}
         </h3>
         {/* Provenance: says plainly whether these are live or bundled numbers */}
         <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -257,25 +241,25 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
               must not claim the table below is live when it is still bundled. */}
           <span className={`inline-flex items-center gap-1.5 font-medium ${hasLiveReport ? 'text-emerald-700' : 'text-gray-500'}`}>
             <span className={`w-2 h-2 rounded-full ${hasLiveReport ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-            {hasLiveReport ? 'Live metrics from the deployed model' : 'Reference metrics bundled at build time'}
+            {hasLiveReport ? t(ui.about.metricsLive) : t(ui.about.metricsBundled)}
           </span>
-          {trainedAt && <span>Trained {trainedAt.replace('T', ' ')}</span>}
-          {epochsRun !== null && <span>{epochsRun} epochs</span>}
-          {valSamples !== null && <span>Held-out validation: {valSamples} images</span>}
+          {trainedAt && <span>{t(ui.about.trainedOn)(date(trainedAt))}</span>}
+          {epochsRun !== null && <span>{t(ui.about.epochsRun)(epochsRun)}</span>}
+          {valSamples !== null && <span>{t(ui.about.valSamples)(valSamples)}</span>}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
             // Prefer the accuracy the training run reported over one re-derived
             // from the per-class table, which rounds differently.
-            { label: 'Overall Accuracy', value: remoteMetrics?.val_accuracy ?? weightedAcc, color: 'from-emerald-500 to-teal-600' },
-            { label: 'Macro Precision', value: macroAvg?.precision ?? avgPrecision, color: 'from-blue-500 to-indigo-600' },
-            { label: 'Macro Recall', value: macroAvg?.recall ?? avgRecall, color: 'from-violet-500 to-purple-600' },
-            { label: 'Macro F1-Score', value: macroAvg?.f1 ?? avgF1, color: 'from-amber-500 to-orange-600' },
+            { label: t(ui.about.overallAccuracy), value: remoteMetrics?.val_accuracy ?? weightedAcc, color: 'from-emerald-500 to-teal-600' },
+            { label: t(ui.about.macroPrecision), value: macroAvg?.precision ?? avgPrecision, color: 'from-blue-500 to-indigo-600' },
+            { label: t(ui.about.macroRecall), value: macroAvg?.recall ?? avgRecall, color: 'from-violet-500 to-purple-600' },
+            { label: t(ui.about.macroF1), value: macroAvg?.f1 ?? avgF1, color: 'from-amber-500 to-orange-600' },
           ].map((m) => (
             <div key={m.label} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm text-center">
               <p className={`text-3xl font-black bg-gradient-to-br ${m.color} bg-clip-text text-transparent`}>
-                {(m.value * 100).toFixed(1)}%
+                {percent(m.value)}
               </p>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-2">{m.label}</p>
             </div>
@@ -286,22 +270,21 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
             experience far better than top-1 alone. */}
         {topk && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-            <h4 className="font-bold text-gray-800 text-sm mb-1">Top-k Accuracy</h4>
+            <h4 className="font-bold text-gray-800 text-sm mb-1">{t(ui.about.topkTitle)}</h4>
             <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              How often the correct rock appears among the model's top k guesses. The result screen
-              lists five, so top-5 is what a user can actually act on — top-1 is the strictest read.
+              {t(ui.about.topkBody)}
             </p>
             <div className="grid grid-cols-3 gap-4">
-              {[
-                { k: 'top1', label: 'Top-1', note: 'first guess correct' },
-                { k: 'top3', label: 'Top-3', note: 'within first three' },
-                { k: 'top5', label: 'Top-5', note: 'shown on screen' },
-              ].map(({ k, label, note }) =>
+              {([
+                { k: 'top1', label: 'Top-1' },
+                { k: 'top3', label: 'Top-3' },
+                { k: 'top5', label: 'Top-5' },
+              ] as const).map(({ k, label }) =>
                 topk[k] !== undefined ? (
                   <div key={k} className="text-center">
-                    <p className="text-2xl font-black text-gray-900">{(topk[k] * 100).toFixed(1)}%</p>
+                    <p className="text-2xl font-black text-gray-900">{percent(topk[k])}</p>
                     <p className="text-xs font-semibold text-gray-500 mt-1">{label}</p>
-                    <p className="text-[11px] text-gray-400">{note}</p>
+                    <p className="text-[11px] text-gray-400">{t(ui.about.topkNotes)[k]}</p>
                   </div>
                 ) : null
               )}
@@ -312,34 +295,30 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
         {/* Macro vs weighted: the gap between them is the imbalance, made visible. */}
         {macroAvg && weightedAvg && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-            <h4 className="font-bold text-gray-800 text-sm mb-1">Macro vs. Weighted Averages</h4>
+            <h4 className="font-bold text-gray-800 text-sm mb-1">{t(ui.about.macroWeightedTitle)}</h4>
             <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-              <strong>Macro</strong> averages every class equally, so the thin classes drag it down.{' '}
-              <strong>Weighted</strong> averages by how many validation images each class has, so it
-              reflects the mix a user is likely to meet. A wide gap between the two <em>is</em> the
-              class imbalance showing up in the numbers — quoting only the higher one would flatter
-              the model.
+              <RichText value={t(ui.about.macroWeightedBody)} />
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[320px]">
                 <thead>
                   <tr className="text-xs text-gray-400 uppercase tracking-wider">
-                    <th className="text-left font-semibold pb-2">Metric</th>
-                    <th className="text-right font-semibold pb-2">Macro</th>
-                    <th className="text-right font-semibold pb-2">Weighted</th>
-                    <th className="text-right font-semibold pb-2">Gap</th>
+                    <th className="text-left font-semibold pb-2">{t(ui.about.tableMetric)}</th>
+                    <th className="text-right font-semibold pb-2">{t(ui.about.tableMacro)}</th>
+                    <th className="text-right font-semibold pb-2">{t(ui.about.tableWeighted)}</th>
+                    <th className="text-right font-semibold pb-2">{t(ui.about.tableGap)}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {([
-                    ['Precision', macroAvg.precision, weightedAvg.precision],
-                    ['Recall', macroAvg.recall, weightedAvg.recall],
-                    ['F1-Score', macroAvg.f1, weightedAvg.f1],
+                    [t(ui.about.precision), macroAvg.precision, weightedAvg.precision],
+                    [t(ui.about.recall), macroAvg.recall, weightedAvg.recall],
+                    [t(ui.about.f1), macroAvg.f1, weightedAvg.f1],
                   ] as [string, number, number][]).map(([name, m, w]) => (
                     <tr key={name} className="border-t border-gray-100">
                       <td className="py-2 text-gray-700">{name}</td>
-                      <td className="py-2 text-right font-mono text-gray-800">{(m * 100).toFixed(1)}%</td>
-                      <td className="py-2 text-right font-mono text-gray-800">{(w * 100).toFixed(1)}%</td>
+                      <td className="py-2 text-right font-mono text-gray-800">{percent(m)}</td>
+                      <td className="py-2 text-right font-mono text-gray-800">{percent(w)}</td>
                       <td className={`py-2 text-right font-mono ${w - m > 0.08 ? 'text-amber-600' : 'text-gray-400'}`}>
                         {w - m >= 0 ? '+' : ''}{((w - m) * 100).toFixed(1)}
                       </td>
@@ -353,7 +332,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
-            <h4 className="font-bold text-gray-800 text-sm">Per-Class Metrics</h4>
+            <h4 className="font-bold text-gray-800 text-sm">{t(ui.about.perClassTitle)}</h4>
             <div className="flex-1" />
             <div className="flex gap-2 flex-wrap">
               {(['all', 'igneous', 'sedimentary', 'metamorphic'] as const).map((cat) => {
@@ -368,13 +347,17 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)} ({count})
+                    {t(ui.categories[cat])} ({count})
                   </button>
                 );
               })}
             </div>
             <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-              {([['f1', 'F1'], ['recall', 'Recall'], ['name', 'A-Z']] as const).map(([key, label]) => (
+              {([
+                ['f1', t(ui.about.f1)],
+                ['recall', t(ui.about.recall)],
+                ['name', t(ui.about.sortAZ)],
+              ] as const).map(([key, label]) => (
                 <button
                   key={key}
                   onClick={() => setMetricSort(key as any)}
@@ -390,10 +373,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
 
           {/* Header */}
           <div className="hidden sm:grid grid-cols-[1fr_100px_100px_100px_50px] gap-2 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
-            <span>Rock Type</span>
-            <span className="text-center">Precision</span>
-            <span className="text-center">Recall</span>
-            <span className="text-center">F1-Score</span>
+            <span>{t(ui.about.colRockType)}</span>
+            <span className="text-center">{t(ui.about.precision)}</span>
+            <span className="text-center">{t(ui.about.recall)}</span>
+            <span className="text-center">{t(ui.about.f1)}</span>
             <span className="text-center">n</span>
           </div>
 
@@ -406,9 +389,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                 <div key={m.name} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_100px_100px_50px] gap-1 sm:gap-2 px-3 py-3 hover:bg-gray-50/60 transition-colors items-center">
                   <div className="flex items-center gap-2">
                     <span className={`inline-block w-2 h-2 rounded-full ${cat.bar}`} />
-                    <span className="font-medium text-sm text-gray-800">{m.name}</span>
+                    <span className="font-medium text-sm text-gray-800">{rockLabel(m.name, locale)}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${cat.bg} ${cat.text} font-medium hidden sm:inline`}>
-                      {m.category}
+                      {t(ui.categories[m.category])}
                     </span>
                   </div>
                   <div className="sm:block">
@@ -429,7 +412,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
           {/* Footer summary */}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_100px_100px_50px] gap-2 px-3 py-3 mt-2 bg-gray-50 rounded-xl text-sm font-semibold">
             <span className="text-gray-700">
-              {metricFilter === 'all' ? 'Macro Average' : `${metricFilter.charAt(0).toUpperCase() + metricFilter.slice(1)} Avg`}
+              {metricFilter === 'all'
+                ? t(ui.about.macroAverage)
+                : t(ui.about.categoryAverage)(t(ui.categories[metricFilter]))}
             </span>
             <span className="text-center text-blue-600">{(sorted.reduce((s, m) => s + m.precision, 0) / sorted.length * 100).toFixed(0)}%</span>
             <span className="text-center text-violet-600">{(sorted.reduce((s, m) => s + m.recall, 0) / sorted.length * 100).toFixed(0)}%</span>
@@ -446,13 +431,13 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
             <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
-            Best Performing Rocks
+            {t(ui.about.bestTitle)}
           </h3>
           <div className="space-y-3">
             {[...classMetrics].sort((a, b) => b.f1 - a.f1).slice(0, 5).map((m, i) => (
               <div key={m.name} className="flex items-center gap-3">
                 <span className="w-6 h-6 bg-emerald-200 rounded-full flex items-center justify-center text-emerald-800 text-xs font-bold">{i + 1}</span>
-                <span className="flex-1 font-medium text-sm text-gray-800">{m.name}</span>
+                <span className="flex-1 font-medium text-sm text-gray-800">{rockLabel(m.name, locale)}</span>
                 <span className="text-sm font-bold text-emerald-700">{(m.f1 * 100).toFixed(0)}% F1</span>
               </div>
             ))}
@@ -464,20 +449,18 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
             <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.834-1.964-.834-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            Most Challenging Rocks
+            {t(ui.about.worstTitle)}
           </h3>
           <div className="space-y-3">
             {[...classMetrics].sort((a, b) => a.f1 - b.f1).slice(0, 5).map((m, i) => (
               <div key={m.name} className="flex items-center gap-3">
                 <span className="w-6 h-6 bg-amber-200 rounded-full flex items-center justify-center text-amber-800 text-xs font-bold">{i + 1}</span>
-                <span className="flex-1 font-medium text-sm text-gray-800">{m.name}</span>
+                <span className="flex-1 font-medium text-sm text-gray-800">{rockLabel(m.name, locale)}</span>
                 <span className="text-sm font-bold text-amber-700">{(m.f1 * 100).toFixed(0)}% F1</span>
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-4">
-            Low scores are mainly due to the small dataset (~30 images per class) and visual similarity between certain rock types.
-          </p>
+          <p className="text-xs text-gray-500 mt-4">{t(ui.about.worstNote)}</p>
         </div>
       </motion.div>
 
@@ -485,23 +468,15 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.28 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-amber-700 text-lg">📦</span>
-          Dataset &amp; Class Balance
+          {t(ui.about.datasetTitle)}
         </h3>
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-5">
-          <p className="text-sm text-gray-600 leading-relaxed">
-            Training images come from <strong>Wikimedia Commons</strong>, which re-hosts specimen
-            photography from recognised sources — notably <strong>GeoDIL</strong> (Geoscience Digital
-            Image Library), whose hand samples are shot against neutral backgrounds. Every image's
-            licence and author is recorded in the dataset manifest.
-          </p>
+          <p className="text-sm text-gray-600 leading-relaxed">{t(ui.about.datasetSourceBody)}</p>
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <p className="text-sm text-amber-900 leading-relaxed">
-              <strong>This is a small, imbalanced dataset, and that is the main limit on accuracy.</strong>{' '}
-              Openly-licensed specimen photography simply does not exist in equal amounts for every
-              rock type. Common rocks like Granite, Basalt and Limestone have plenty; rare ones like
-              Dunite and Syenite have very few. Classes with fewer images are measurably less
-              reliable, and no amount of augmentation fully compensates for that.
+              <strong>{t(ui.about.datasetWarnLead)}</strong>
+              {t(ui.about.datasetWarnBody)}
             </p>
           </div>
 
@@ -509,10 +484,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
             <>
               <div className="flex items-baseline justify-between">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Images per class
+                  {t(ui.about.imagesPerClass)}
                 </p>
                 {datasetTotal !== null && (
-                  <p className="text-xs text-gray-400">{datasetTotal} images total</p>
+                  <p className="text-xs text-gray-400">{t(ui.about.imagesTotal)(datasetTotal)}</p>
                 )}
               </div>
               <div className="space-y-1.5">
@@ -522,7 +497,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                     n < 25 ? 'bg-red-400' : n < 40 ? 'bg-amber-400' : 'bg-emerald-400';
                   return (
                     <div key={name} className="flex items-center gap-3">
-                      <span className="text-xs text-gray-600 w-24 flex-shrink-0 truncate">{name}</span>
+                      <span className="text-xs text-gray-600 w-24 flex-shrink-0 truncate">{rockLabel(name, locale)}</span>
                       <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                         <div className={`h-full ${tone} rounded-full`} style={{ width: `${pct}%` }} />
                       </div>
@@ -532,24 +507,20 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                 })}
               </div>
               <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-1">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> under 25 — unreliable</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> 25–39 — weak</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> 40+ — acceptable</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> {t(ui.about.legendUnreliable)}</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> {t(ui.about.legendWeak)}</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> {t(ui.about.legendAcceptable)}</span>
               </div>
               {thinClasses.length > 0 && (
                 <p className="text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
-                  <strong>Under-represented in this build:</strong>{' '}
-                  {thinClasses.join(', ')}. Predictions naming these types deserve extra scepticism,
-                  and the model is also biased <em>against</em> them — it will more often fall back
-                  on a well-represented class it has seen more of.
+                  <strong>{t(ui.about.thinLead)}</strong>{' '}
+                  {thinClasses.map((n) => rockLabel(n, locale)).join(', ')}
+                  {t(ui.about.thinBody)}
                 </p>
               )}
             </>
           ) : (
-            <p className="text-sm text-gray-500 italic">
-              Live dataset statistics load from the backend. Connect the classification API to see
-              the exact per-class image counts for the deployed model.
-            </p>
+            <p className="text-sm text-gray-500 italic">{t(ui.about.datasetFallback)}</p>
           )}
         </div>
       </motion.div>
@@ -559,20 +530,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
         <motion.div {...fadeUp} transition={{ delay: 0.29 }}>
           <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
             <span className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center text-violet-700 text-lg">🔀</span>
-            Confusion Matrix
+            {t(ui.about.confusionTitle)}
           </h3>
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Each row is the <strong>true</strong> rock type and each column what the model{' '}
-              <strong>predicted</strong>, on the held-out validation split. A perfect model would
-              light up only the diagonal. Off-diagonal cells are the real confusions — most of them
-              fall between genuinely similar rocks (Gneiss/Schist, Chalk/Limestone), which is the
-              expected failure mode rather than a bug.
-            </p>
-            <p className="text-xs text-gray-500">
-              Rows for thin classes are based on very few validation samples, so a single mistake
-              swings their score dramatically. Read those rows as indicative, not statistical.
-            </p>
+            <p className="text-sm text-gray-600 leading-relaxed">{t(ui.about.confusionBody)}</p>
+            <p className="text-xs text-gray-500">{t(ui.about.confusionCaveat)}</p>
 
             <div className="overflow-x-auto">
               <table className="border-collapse" style={{ fontSize: '9px' }}>
@@ -585,7 +547,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                           className="text-gray-500 whitespace-nowrap origin-bottom-left translate-x-3 -rotate-90 w-5"
                           style={{ transformOrigin: 'bottom left' }}
                         >
-                          {l}
+                          {rockLabel(l, locale)}
                         </div>
                       </th>
                     ))}
@@ -597,7 +559,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                     return (
                       <tr key={confusionLabels[i]}>
                         <td className="sticky left-0 bg-white z-10 pr-2 text-right text-gray-600 whitespace-nowrap">
-                          {confusionLabels[i]}
+                          {rockLabel(confusionLabels[i], locale)}
                         </td>
                         {row.map((v, j) => {
                           const frac = rowTotal > 0 ? v / rowTotal : 0;
@@ -613,7 +575,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
                           return (
                             <td
                               key={j}
-                              title={`True ${confusionLabels[i]} → predicted ${confusionLabels[j]}: ${v}`}
+                              title={t(ui.about.confusionCell)(
+                                rockLabel(confusionLabels[i], locale),
+                                rockLabel(confusionLabels[j], locale),
+                                v,
+                              )}
                               className="w-5 h-5 text-center border border-gray-100"
                               style={{ background: bg, color: ink }}
                             >
@@ -628,8 +594,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
               </table>
             </div>
             <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" /> correct (diagonal)</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400" /> misclassified</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" /> {t(ui.about.confusionLegendCorrect)}</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400" /> {t(ui.about.confusionLegendWrong)}</span>
             </div>
           </div>
         </motion.div>
@@ -639,46 +605,16 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.3 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center text-red-700 text-lg">⚠️</span>
-          Limitations
+          {t(ui.about.limitationsTitle)}
         </h3>
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <ul className="space-y-3 text-sm text-gray-700">
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Small dataset:</strong> A few dozen images per class, not the thousands a robust classifier needs. This is the single biggest constraint on accuracy — bigger than the architecture or the training recipe.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Unequal class coverage:</strong> Some rock types could not be represented well. Openly-licensed specimen photography is abundant for common rocks and scarce for rare ones, so classes like Dunite or Syenite are built from a handful of images. Their scores in the table above are unreliable in both directions.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Bias toward well-represented classes:</strong> When uncertain, the model drifts toward the types it saw most. Weighted sampling reduces this but does not remove it — a confident "Granite" on an ambiguous photo may just be the prior talking.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Small validation split:</strong> Metrics and the confusion matrix are computed on a 20% hold-out. For thin classes that is a couple of images, so one error moves the number by tens of percentage points. Treat per-class figures as indicative, not precise.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Visual similarity:</strong> Gneiss vs. Schist and Chalk vs. Limestone share visual features. These confusions are visible in the matrix above and are genuinely hard — geologists use hardness, reaction to acid and grain structure, none of which a photo captures.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Mixed photographic scale:</strong> Most training images are hand samples on neutral backgrounds, but roughly one in six is a field or outcrop shot that survived filtering. The model therefore sees the same rock at very different scales, which blurs what it learns. Close-up photos of a single specimen are what it handles best.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Limited to 25 types:</strong> There is no "unknown" option. Rocks outside this catalogue are forced into the closest match and still reported with a confidence score.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Demonstration tool:</strong> Not for professional geological assessment — always verify with a specialist.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
-              <span><strong>Image quality dependent:</strong> Blurry, dark or distant photos produce unreliable results.</span>
-            </li>
+            {t(ui.about.limitations).map((item) => (
+              <li key={item.label} className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></span>
+                <span><strong>{item.label}</strong> {item.body}</span>
+              </li>
+            ))}
           </ul>
         </div>
       </motion.div>
@@ -687,34 +623,16 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.33 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center text-sky-700 text-lg">📷</span>
-          Tips for Best Results
+          {t(ui.about.tipsTitle)}
         </h3>
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">1</span>
-              <span>Use natural, diffused lighting — avoid harsh shadows or flash.</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">2</span>
-              <span>Photograph both fresh and weathered surfaces when possible.</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">3</span>
-              <span>Include a scale reference (coin, pen) nearby for context.</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">4</span>
-              <span>Keep the rock centered and fill the frame as much as possible.</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">5</span>
-              <span>A plain background (white paper, flat surface) reduces noise.</span>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">6</span>
-              <span>Minimum resolution of 224×224 pixels — higher is better.</span>
-            </div>
+            {t(ui.about.tips).map((tip, i) => (
+              <div key={tip} className="flex items-start gap-3">
+                <span className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xs font-bold flex-shrink-0">{i + 1}</span>
+                <span>{tip}</span>
+              </div>
+            ))}
           </div>
         </div>
       </motion.div>
@@ -723,14 +641,14 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
       <motion.div {...fadeUp} transition={{ delay: 0.35 }}>
         <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <span className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700 text-lg">⚙️</span>
-          Technology Stack
+          {t(ui.about.techTitle)}
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {techStack.map((tech) => (
             <div key={tech.name} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm text-center hover:shadow-md transition-shadow">
               <span className="text-2xl">{tech.icon}</span>
               <p className="font-semibold text-gray-900 text-sm mt-2">{tech.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{tech.role}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{t(ui.about.techRoles)[tech.name]}</p>
             </div>
           ))}
         </div>
@@ -742,7 +660,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onGoToClassifier }) => {
           onClick={onGoToClassifier}
           className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300"
         >
-          Try It Now
+          {t(ui.about.cta)}
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>

@@ -1,43 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface RockEntry {
-  name: string;
-  type: string;
-  category: 'igneous' | 'sedimentary' | 'metamorphic';
-  color: string;
-  grain: string;
-  emoji: string;
-  description: string;
-}
-
-const ROCK_CATALOG: RockEntry[] = [
-  { name: 'Granite', type: 'Igneous - Intrusive', category: 'igneous', color: 'Light gray, white, pink', grain: 'Coarse', emoji: '🪨', description: 'Hard igneous rock composed of quartz, feldspar, and mica. Forms deep underground from slow cooling of magma.' },
-  { name: 'Basalt', type: 'Igneous - Extrusive', category: 'igneous', color: 'Dark gray to black', grain: 'Fine', emoji: '🌋', description: 'Dark volcanic rock, the most common igneous rock. Forms from rapid cooling of lava at Earth\'s surface.' },
-  { name: 'Limestone', type: 'Sedimentary', category: 'sedimentary', color: 'White, gray, tan', grain: 'Variable', emoji: '🐚', description: 'Composed of calcium carbonate from marine organisms. Widely used in construction and cement production.' },
-  { name: 'Sandstone', type: 'Sedimentary', category: 'sedimentary', color: 'Tan, brown, red', grain: 'Medium', emoji: '🏜️', description: 'Formed from consolidated sand grains deposited in rivers, beaches, and deserts.' },
-  { name: 'Shale', type: 'Sedimentary', category: 'sedimentary', color: 'Gray, black, brown', grain: 'Very fine', emoji: '📄', description: 'Most common sedimentary rock, formed from compressed mud and clay. Splits into thin layers.' },
-  { name: 'Slate', type: 'Metamorphic', category: 'metamorphic', color: 'Gray, black, green', grain: 'Very fine', emoji: '🏫', description: 'Fine-grained metamorphic rock derived from shale. Known for splitting into flat sheets.' },
-  { name: 'Marble', type: 'Metamorphic', category: 'metamorphic', color: 'White, pink, gray', grain: 'Medium crystalline', emoji: '🏛️', description: 'Recrystallized limestone prized for beauty. Used in art and architecture for millennia.' },
-  { name: 'Quartzite', type: 'Metamorphic', category: 'metamorphic', color: 'White, gray, pink', grain: 'Medium crystalline', emoji: '💎', description: 'Hard rock formed from sandstone metamorphism. Composed almost entirely of quartz.' },
-  { name: 'Gneiss', type: 'Metamorphic', category: 'metamorphic', color: 'Banded light/dark', grain: 'Medium to coarse', emoji: '🌀', description: 'High-grade metamorphic rock with distinctive banding. Forms under extreme heat and pressure.' },
-  { name: 'Schist', type: 'Metamorphic', category: 'metamorphic', color: 'Silver, green, brown', grain: 'Medium to coarse', emoji: '✨', description: 'Medium-grade metamorphic rock with strong foliation and visible shiny mica minerals.' },
-  { name: 'Diorite', type: 'Igneous - Intrusive', category: 'igneous', color: 'Medium gray', grain: 'Coarse', emoji: '⚪', description: 'Intrusive igneous rock with a characteristic salt-and-pepper appearance.' },
-  { name: 'Pegmatite', type: 'Igneous - Intrusive', category: 'igneous', color: 'Variable', grain: 'Very coarse', emoji: '🔮', description: 'Igneous rock with exceptionally large crystals, often containing rare earth minerals.' },
-  { name: 'Obsidian', type: 'Igneous - Volcanic Glass', category: 'igneous', color: 'Black, dark brown', grain: 'Glassy', emoji: '🖤', description: 'Volcanic glass formed from extremely rapid lava cooling. Has conchoidal fracture.' },
-  { name: 'Pumice', type: 'Igneous - Volcanic', category: 'igneous', color: 'White, light gray', grain: 'Vesicular', emoji: '🫧', description: 'Extremely porous volcanic rock light enough to float on water.' },
-  { name: 'Andesite', type: 'Igneous - Extrusive', category: 'igneous', color: 'Gray', grain: 'Fine', emoji: '🏔️', description: 'Intermediate volcanic rock common in subduction zone volcanoes. Named after the Andes.' },
-  { name: 'Rhyolite', type: 'Igneous - Extrusive', category: 'igneous', color: 'Light gray, pink', grain: 'Fine', emoji: '🌸', description: 'Light-colored volcanic rock, the extrusive equivalent of granite.' },
-  { name: 'Conglomerate', type: 'Sedimentary', category: 'sedimentary', color: 'Multicolored', grain: 'Coarse (rounded)', emoji: '🫘', description: 'Composed of rounded pebbles and gravel cemented together by minerals.' },
-  { name: 'Breccia', type: 'Sedimentary', category: 'sedimentary', color: 'Variable', grain: 'Coarse (angular)', emoji: '🧩', description: 'Composed of angular rock fragments, indicating minimal water transport.' },
-  { name: 'Tuff', type: 'Igneous - Pyroclastic', category: 'igneous', color: 'White, tan', grain: 'Fine to medium', emoji: '💨', description: 'Formed from compacted volcanic ash ejected during explosive eruptions.' },
-  { name: 'Flint', type: 'Sedimentary', category: 'sedimentary', color: 'Black, dark gray', grain: 'Cryptocrystalline', emoji: '🔥', description: 'Hard cryptocrystalline quartz, one of humanity\'s first tool-making materials.' },
-  { name: 'Chalk', type: 'Sedimentary', category: 'sedimentary', color: 'White', grain: 'Very fine', emoji: '🤍', description: 'Soft white rock composed of microscopic marine coccolithophore shells.' },
-  { name: 'Dolomite', type: 'Sedimentary', category: 'sedimentary', color: 'White, gray, pink', grain: 'Fine to medium', emoji: '🏔️', description: 'Similar to limestone but with calcium magnesium carbonate composition.' },
-  { name: 'Dunite', type: 'Igneous - Ultramafic', category: 'igneous', color: 'Green, olive', grain: 'Coarse', emoji: '🫒', description: 'Ultramafic rock composed mostly of olivine, formed deep in Earth\'s mantle.' },
-  { name: 'Syenite', type: 'Igneous - Intrusive', category: 'igneous', color: 'Gray, pink', grain: 'Coarse', emoji: '🩷', description: 'Similar to granite but very low in quartz. Composed mainly of alkali feldspar.' },
-  { name: 'Porphyry', type: 'Igneous', category: 'igneous', color: 'Variable', grain: 'Mixed', emoji: '🎨', description: 'Large crystals embedded in a fine-grained matrix, indicating two stages of cooling.' },
-];
+import { useLocale } from '../lib/i18n';
+import { ui } from '../data/ui';
+import { ROCK_CATALOG } from '../data/rocks';
 
 type Filter = 'all' | 'igneous' | 'sedimentary' | 'metamorphic';
 
@@ -48,14 +13,21 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
 };
 
 export const RockCatalog: React.FC = () => {
+  const { locale, t } = useLocale();
   const [filter, setFilter] = useState<Filter>('all');
   const [expandedRock, setExpandedRock] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
+  // Match against the displayed name and type, plus the canonical English class
+  // name, so searching "Granite" still works while browsing in Spanish.
+  const needle = search.trim().toLowerCase();
   const filteredRocks = ROCK_CATALOG.filter(
     (rock) =>
       (filter === 'all' || rock.category === filter) &&
-      (search === '' || rock.name.toLowerCase().includes(search.toLowerCase()) || rock.type.toLowerCase().includes(search.toLowerCase()))
+      (needle === '' ||
+        rock.label[locale].toLowerCase().includes(needle) ||
+        rock.type[locale].toLowerCase().includes(needle) ||
+        rock.name.toLowerCase().includes(needle))
   );
 
   const counts = {
@@ -69,9 +41,11 @@ export const RockCatalog: React.FC = () => {
     <div className="space-y-8">
       {/* Header */}
       <div className="text-center">
-        <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-3">Rock Catalog</h2>
+        <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-3">{t(ui.catalog.title)}</h2>
         <p className="text-gray-600 max-w-lg mx-auto">
-          Explore the <span className="font-semibold text-amber-600">25 rock types</span> our AI can identify. Learn about their properties, formation, and uses.
+          {t(ui.catalog.subtitleBefore)}
+          <span className="font-semibold text-amber-600">{t(ui.catalog.subtitleHighlight)}</span>
+          {t(ui.catalog.subtitleAfter)}
         </p>
       </div>
 
@@ -84,7 +58,7 @@ export const RockCatalog: React.FC = () => {
           </svg>
           <input
             type="text"
-            placeholder="Search rocks by name or type..."
+            placeholder={t(ui.catalog.searchPlaceholder)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-11 pr-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-all"
@@ -103,7 +77,7 @@ export const RockCatalog: React.FC = () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {t(ui.categories[f])}
               <span className={`ml-1.5 text-xs ${filter === f ? 'text-gray-400' : 'text-gray-400'}`}>
                 {counts[f]}
               </span>
@@ -137,13 +111,13 @@ export const RockCatalog: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-gray-900 text-lg">{rock.name}</h3>
+                      <h3 className="font-bold text-gray-900 text-lg">{rock.label[locale]}</h3>
                     </div>
                     <span className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full ${colors.badge}`}>
-                      {rock.type}
+                      {rock.type[locale]}
                     </span>
                     {!isExpanded && (
-                      <p className="text-gray-500 text-sm mt-2 line-clamp-2">{rock.description}</p>
+                      <p className="text-gray-500 text-sm mt-2 line-clamp-2">{rock.description[locale]}</p>
                     )}
                   </div>
                 </div>
@@ -157,19 +131,19 @@ export const RockCatalog: React.FC = () => {
                       transition={{ duration: 0.3 }}
                       className="mt-5 pt-5 border-t border-gray-100"
                     >
-                      <p className="text-gray-700 leading-relaxed mb-5">{rock.description}</p>
+                      <p className="text-gray-700 leading-relaxed mb-5">{rock.description[locale]}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className={`rounded-xl p-3.5 ${colors.bg}`}>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Color</p>
-                          <p className="text-sm font-medium text-gray-800">{rock.color}</p>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{t(ui.catalog.color)}</p>
+                          <p className="text-sm font-medium text-gray-800">{rock.color[locale]}</p>
                         </div>
                         <div className={`rounded-xl p-3.5 ${colors.bg}`}>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Grain Size</p>
-                          <p className="text-sm font-medium text-gray-800">{rock.grain}</p>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{t(ui.catalog.grainSize)}</p>
+                          <p className="text-sm font-medium text-gray-800">{rock.grain[locale]}</p>
                         </div>
                         <div className={`rounded-xl p-3.5 ${colors.bg}`}>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Category</p>
-                          <p className="text-sm font-medium text-gray-800 capitalize">{rock.category}</p>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{t(ui.catalog.category)}</p>
+                          <p className="text-sm font-medium text-gray-800">{t(ui.categories[rock.category])}</p>
                         </div>
                       </div>
                     </motion.div>
@@ -183,7 +157,7 @@ export const RockCatalog: React.FC = () => {
 
       {filteredRocks.length === 0 && (
         <div className="text-center py-16">
-          <p className="text-gray-400 text-lg">No rocks match your search.</p>
+          <p className="text-gray-400 text-lg">{t(ui.catalog.empty)}</p>
         </div>
       )}
     </div>

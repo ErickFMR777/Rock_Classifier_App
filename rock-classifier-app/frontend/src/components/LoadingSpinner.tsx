@@ -1,7 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useLocale } from '../lib/i18n';
+import { ui } from '../data/ui';
 
 export const LoadingSpinner: React.FC = () => {
+  const { t } = useLocale();
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -16,8 +19,8 @@ export const LoadingSpinner: React.FC = () => {
         />
       </div>
       <div className="space-y-2 text-center">
-        <p className="text-xl font-bold text-gray-800">Analyzing your rock...</p>
-        <p className="text-sm text-gray-500">Using deep learning AI (ResNet50)</p>
+        <p className="text-xl font-bold text-gray-800">{t(ui.loading.title)}</p>
+        <p className="text-sm text-gray-500">{t(ui.loading.subtitle)}</p>
       </div>
     </motion.div>
   );

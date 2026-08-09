@@ -1,15 +1,18 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { useLocale } from '../lib/i18n';
+import { ui } from '../data/ui';
 
 interface UploadZoneProps {
   onImageSelected: (file: File) => void;
   isLoading?: boolean;
 }
 
-export const UploadZone: React.FC<UploadZoneProps> = ({ 
-  onImageSelected, 
-  isLoading = false 
+export const UploadZone: React.FC<UploadZoneProps> = ({
+  onImageSelected,
+  isLoading = false
 }) => {
+  const { t } = useLocale();
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
 
@@ -54,15 +57,15 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
       {preview ? (
         <div className="p-4 flex flex-col items-center gap-3">
           <div className="relative w-full aspect-square max-h-48 rounded-lg overflow-hidden bg-gray-100">
-            <img 
-              src={preview} 
-              alt="Preview" 
-              className="w-full h-full object-cover" 
+            <img
+              src={preview}
+              alt={t(ui.upload.previewAlt)}
+              className="w-full h-full object-cover"
             />
             {!isLoading && (
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
                 <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 px-3 py-1.5 rounded-full">
-                  Change photo
+                  {t(ui.upload.changePhoto)}
                 </span>
               </div>
             )}
@@ -86,9 +89,9 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           </div>
           <div className="text-center">
             <p className="text-sm font-semibold text-gray-700">
-              {isDragActive ? 'Drop your image here' : 'Drop a rock photo or click to browse'}
+              {isDragActive ? t(ui.upload.dropActive) : t(ui.upload.dropIdle)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP — up to 5 MB</p>
+            <p className="text-xs text-gray-400 mt-1">{t(ui.upload.formats)}</p>
           </div>
         </div>
       )}

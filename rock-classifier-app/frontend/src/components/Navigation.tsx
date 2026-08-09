@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { healthCheck } from '../api/client';
+import { LOCALES, useLocale } from '../lib/i18n';
+import { ui } from '../data/ui';
 
 export type Page = 'classifier' | 'catalog' | 'about';
 
@@ -9,10 +11,9 @@ interface NavigationProps {
   onPageChange: (page: Page) => void;
 }
 
-const navItems: { key: Page; label: string; icon: JSX.Element }[] = [
+const navItems: { key: Page; icon: JSX.Element }[] = [
   {
     key: 'classifier',
-    label: 'Classify',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -21,7 +22,6 @@ const navItems: { key: Page; label: string; icon: JSX.Element }[] = [
   },
   {
     key: 'catalog',
-    label: 'Rock Catalog',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -30,7 +30,6 @@ const navItems: { key: Page; label: string; icon: JSX.Element }[] = [
   },
   {
     key: 'about',
-    label: 'About',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -40,6 +39,8 @@ const navItems: { key: Page; label: string; icon: JSX.Element }[] = [
 ];
 
 export const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChange }) => {
+  const { locale, setLocale, t } = useLocale();
+
   // Probe the API rather than hardcoding "AI Online": the badge should reflect
   // whether inference is actually reachable, not just that the page loaded.
   const [apiUp, setApiUp] = useState<boolean | null>(null);
@@ -89,23 +90,60 @@ export const Navigation: React.FC<NavigationProps> = ({ currentPage, onPageChang
                   />
                 )}
                 <span className="relative z-10">{item.icon}</span>
-                <span className="relative z-10 hidden sm:block">{item.label}</span>
+                <span className="relative z-10 hidden sm:block">{t(ui.nav[item.key])}</span>
               </button>
             ))}
           </div>
 
-          {/* Status Badge */}
-          <div className="hidden md:flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                apiUp === null
-                  ? 'bg-gray-300'
-                  : apiUp
-                    ? 'bg-emerald-500 animate-pulse'
-                    : 'bg-red-400'
-              }`}
-            ></span>
-            {apiUp === null ? 'Checking…' : apiUp ? 'AI Online' : 'AI Offline'}
+          {/* Right group: status badge + language switch */}
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2 text-xs font-medium text-gray-500">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  apiUp === null
+                    ? 'bg-gray-300'
+                    : apiUp
+                      ? 'bg-emerald-500 animate-pulse'
+                      : 'bg-red-400'
+                }`}
+              ></span>
+              {apiUp === null
+                ? t(ui.nav.apiChecking)
+                : apiUp
+                  ? t(ui.nav.apiOnline)
+                  : t(ui.nav.apiOffline)}
+            </div>
+
+            <div
+              className="flex items-center gap-0.5 bg-gray-100/80 rounded-full p-1"
+              role="group"
+              aria-label={t(ui.localeToggle.label)}
+            >
+              {LOCALES.map((code) => {
+                const active = code === locale;
+                return (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => setLocale(code)}
+                    aria-pressed={active}
+                    lang={code}
+                    className={`relative px-2.5 py-1 rounded-full text-xs font-bold tracking-wide transition-colors duration-200 ${
+                      active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="localePill"
+                        className="absolute inset-0 bg-white rounded-full shadow-sm"
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10">{code.toUpperCase()}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
