@@ -117,6 +117,32 @@ category listings are dominated by landscapes and buildings, and GeoDIL titles a
 thin section identically to a hand sample — only the description and categories
 distinguish them.
 
+**`MANIFEST.json` is the licence record, and it has to stay complete.** It is the
+only proof of provenance in the repo — the images themselves are not tracked, so
+if an entry is missing or blank there is nothing else to fall back on. As audited,
+all **1481** entries carry a licence and a source URL, every one resolves to
+`commons.wikimedia.org`, and the per-class counts match `metrics.json` →
+`dataset_counts` exactly. That equality is what proves the trained model saw only
+these images; check it after any dataset change.
+
+Attribution is not optional for most of the corpus: CC0 (555) and public domain
+(72) do not require credit, but CC BY and CC BY-SA — the majority — do. An entry
+with an empty `artist` under one of those licences is a licence violation, not a
+cosmetic gap. Nine such blanks were repaired by re-querying the Commons API with
+the `source` URL each entry already stores; that is the recovery route if it
+happens again. Where Commons flags `AttributionRequired` but declares no author,
+the record names the **uploader** and says so explicitly — never invent an author
+the source does not assert.
+
+**Search-engine scrapers were deliberately removed.** `download_images.py`
+(DuckDuckGo), `download_bing.py` and `clean_and_augment.py` (icrawler), plus the
+ResNet50 `train_model.py` they fed, were superseded and deleted — they are in git
+history if ever needed. They produced images with **no licence and no author**,
+which would silently break the guarantee above the moment anyone ran them, since
+nothing downstream re-checks provenance. `download_commons.py` is the only
+sanctioned way to add images. Do not reintroduce scraping without also recording
+licence, author and source per file.
+
 **About page metrics.** `AboutPage.tsx` ships hardcoded per-class metrics as a
 fallback and overrides them from `GET /api/model/metrics`. The fallback mirrors
 `api/_lib/metrics.json`, so the offline view cannot report a different training
